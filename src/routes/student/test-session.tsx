@@ -203,8 +203,9 @@ export default function StudentTestSession() {
       case "traditional": 
       case "mcq-single":
         return answerState === activeQuestion.correctId;
-      case "next-gen-cloze": 
+      case "next-gen-cloze": {
         return Object.entries(activeQuestion.options?.blanks || {}).every(([key, blank]) => (blank as any).correct === answerState[key]);
+      }
       case "next-gen-matrix":
         return Object.entries(activeQuestion.correctAnswers || {}).every(([rowId, colId]) => answerState[rowId] === colId);
       case "bowtie": {
@@ -439,27 +440,62 @@ export default function StudentTestSession() {
                   const blank = activeQuestion.options?.blanks?.[blankId];
                   if (!blank) return null;
                   
-                  const isAnsweredCorrectly = answers[blankId] === blank.correct;
+                  let isAnsweredCorrectly = answers[blankId] === blank.correct;
+                  let availableOptions = blank.options;
+                  
+                  if (activeQuestion.options?.clozeDependentMode) {
+                    const blankKeys = Object.keys(activeQuestion.options?.blanks || {});
+                    const combos = activeQuestion.options?.clozeCombinations || [];
+                    const b1 = answers[blankKeys[0]];
+                    
+                    if (blankId === blankKeys[1]) {
+                      if (b1) {
+                        // Check if combos use new grouped format or old flat format
+                        const isNewFormat = combos.length > 0 && Array.isArray(combos[0].connectedOptions);
+                        
+                        let validBlank2Options: string[] = [];
+                        if (isNewFormat) {
+                          const group = combos.find((c: any) => c.blank1 === b1);
+                          validBlank2Options = group?.connectedOptions || [];
+                        } else {
+                          validBlank2Options = combos.filter((c: any) => c.blank1 === b1).map((c: any) => c.blank2);
+                        }
+                        
+                        availableOptions = blank.options.filter((opt: string) => validBlank2Options.includes(opt));
+                      } else {
+                        availableOptions = [];
+                      }
+                    }
+                  }
                   
                   return (
                     <span key={i} className="inline-block px-1">
                       <select
-                        disabled={isSubmitted}
+                        disabled={isSubmitted || availableOptions.length === 0}
                         value={answers[blankId] || ""}
-                        onChange={(e) => setAnswerState({ ...answers, [blankId]: e.target.value })}
+                        onChange={(e) => {
+                          const newAns = { ...answers, [blankId]: e.target.value };
+                          // If we just changed blank 1, clear blank 2 to force re-selection from the new filtered list
+                          if (activeQuestion.options?.clozeDependentMode && blankId === Object.keys(activeQuestion.options?.blanks || {})[0]) {
+                            const b2Key = Object.keys(activeQuestion.options?.blanks || {})[1];
+                            if (b2Key) newAns[b2Key] = "";
+                          }
+                          setAnswerState(newAns);
+                        }}
                         className={cn(
                           "h-8 cursor-pointer appearance-none rounded-lg border bg-card px-3 pr-7 text-sm font-medium outline-none transition-all",
                           !isSubmitted && "border-border hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20",
                           isSubmitted && isAnsweredCorrectly && "border-success bg-success/10 text-success font-semibold",
-                          isSubmitted && !isAnsweredCorrectly && "border-destructive bg-destructive/10 text-destructive font-semibold"
+                          isSubmitted && !isAnsweredCorrectly && "border-destructive bg-destructive/10 text-destructive font-semibold",
+                          availableOptions.length === 0 && "opacity-50 cursor-not-allowed"
                         )}
                         style={{
                           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                           backgroundRepeat: "no-repeat", backgroundPosition: "right 0.5rem center", backgroundSize: "1em",
                         }}
                       >
-                        <option value="" disabled>Select...</option>
-                        {blank.options.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
+                        <option value="" disabled>{availableOptions.length === 0 ? "Select previous blank first" : "Select..."}</option>
+                        {availableOptions.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
                       </select>
                     </span>
                   );
@@ -713,6 +749,7 @@ export default function StudentTestSession() {
           {...attributes}
           className={cn(
             "rounded-2xl border border-white/40 bg-white/90 backdrop-blur-sm px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)] transition-all hover:shadow-[0_8px_16px_-4px_rgba(0,0,0,0.1),0_0_0_1px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 max-w-full break-words text-wrap touch-none relative overflow-hidden group",
+            !typeId.startsWith("bank-") && "w-full",
             isDragging && "opacity-80 ring-4 ring-primary/20 scale-105 shadow-xl rotate-1",
             isSubmitted && "opacity-60 cursor-default hover:transform-none hover:shadow-sm"
           )}
@@ -741,7 +778,7 @@ export default function StudentTestSession() {
       return (
         <div 
           ref={setNodeRef}
-          className={cn("flex min-h-[4rem] h-auto w-full flex-col items-center justify-center rounded-2xl px-2 py-2 transition-all duration-300 ease-out cursor-pointer relative", uiClass)}
+          className={cn("flex min-h-[3.25rem] h-auto w-full flex-col items-center justify-center rounded-xl px-2 py-1.5 transition-all duration-300 ease-out cursor-pointer relative", uiClass)}
         >
           {value ? (
             <div className="flex w-full h-full items-center justify-center font-semibold animate-in fade-in zoom-in-95 duration-200">
@@ -758,7 +795,7 @@ export default function StudentTestSession() {
         <div 
           ref={setNodeRef} 
           className={cn(
-            "flex min-h-[100px] rounded-[2rem] border border-white p-6 transition-all duration-300 bg-slate-50/80 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]", 
+            "flex min-h-[80px] rounded-[1.5rem] border border-white p-4 transition-all duration-300 bg-slate-50/80 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]", 
             isOver ? "bg-white border-primary/30 ring-4 ring-primary/5 scale-[1.01]" : "", 
             className || "flex-col gap-2"
           )}
@@ -770,31 +807,31 @@ export default function StudentTestSession() {
 
     return (
       <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-        <div className="space-y-8 select-none relative z-0">
-          <div className="flex flex-col md:flex-row items-stretch justify-center gap-6 rounded-[2.5rem] border-0 bg-slate-50/40 p-6 md:p-8 shadow-[inset_0_2px_20px_rgba(0,0,0,0.02)] overflow-x-auto relative min-h-[250px]">
+        <div className="space-y-4 select-none relative z-0">
+          <div className="flex flex-col md:flex-row items-stretch justify-center gap-2 rounded-[2rem] border-0 bg-slate-50/40 p-2 md:p-4 shadow-[inset_0_2px_20px_rgba(0,0,0,0.02)] overflow-x-auto relative min-h-[160px]">
             
             {/* Background connection lines using SVG for Bow-Tie shape */}
-            <div className="absolute inset-0 z-0 hidden md:block pointer-events-none opacity-40">
+            <div className="absolute inset-0 top-10 z-0 hidden md:block pointer-events-none opacity-40">
                <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                  {correctActions.map((_, i) => {
                     const total = correctActions.length;
                     const spread = Math.min(60, total * 20);
                     const startY = 50 - spread/2;
                     const y = total === 1 ? 50 : startY + (spread * i / (total - 1));
-                    return <path key={`left-${i}`} d={`M 16 ${y} C 35 ${y}, 35 50, 50 50`} fill="none" stroke="currentColor" strokeWidth="0.6" className="text-primary/60" strokeLinecap="round" strokeDasharray="1.5 1.5" />;
+                    return <path key={`left-${i}`} d={`M 31 ${y} C 36 ${y}, 36 50, 45 50`} fill="none" stroke="currentColor" strokeWidth="0.8" className="text-primary/70" strokeLinecap="round" strokeDasharray="3 3" />;
                  })}
                  {correctParameters.map((_, i) => {
                     const total = correctParameters.length;
                     const spread = Math.min(60, total * 20);
                     const startY = 50 - spread/2;
                     const y = total === 1 ? 50 : startY + (spread * i / (total - 1));
-                    return <path key={`right-${i}`} d={`M 50 50 C 65 50, 65 ${y}, 84 ${y}`} fill="none" stroke="currentColor" strokeWidth="0.6" className="text-primary/60" strokeLinecap="round" strokeDasharray="1.5 1.5" />;
+                    return <path key={`right-${i}`} d={`M 55 50 C 64 50, 64 ${y}, 69 ${y}`} fill="none" stroke="currentColor" strokeWidth="0.8" className="text-primary/70" strokeLinecap="round" strokeDasharray="3 3" />;
                  })}
                </svg>
             </div>
 
             {/* Actions Left */}
-            <div className="relative z-10 w-full min-w-[220px] flex-1 space-y-4 px-2 py-4 flex flex-col justify-center">
+            <div className="relative z-10 w-full min-w-[220px] flex-1 space-y-2.5 px-2 py-2 flex flex-col justify-center">
               <h3 className="mb-4 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Causes/Assessments</h3>
               {correctActions.map((_, i: number) => (
                 <DroppableSlot key={i} label={`Cause/Assessment ${i+1}`} id={`actions-${i}`} value={state.actions?.[i]} isExpected={(v: string) => correctActions.some((c: any) => c.text === v)} />
@@ -803,9 +840,9 @@ export default function StudentTestSession() {
 
             {/* Condition Center */}
             <div className="relative z-10 w-full min-w-[240px] flex-1 px-2 py-4 flex flex-col items-center justify-center">
-              <h3 className="mb-6 text-center text-[13px] font-extrabold uppercase tracking-[0.25em] text-primary">Core Condition</h3>
+              <h3 className="mb-4 text-center text-[13px] font-extrabold uppercase tracking-[0.25em] text-primary">Core Condition</h3>
               <div className="w-full max-w-[320px]">
-                <div className="flex min-h-[5.5rem] h-auto w-full flex-col items-center justify-center rounded-[2rem] px-3 py-3 transition-all bg-gradient-to-br from-primary to-primary/80 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.15)] border border-primary/20 relative group">
+                <div className="flex min-h-[4.5rem] h-auto w-full flex-col items-center justify-center rounded-[1.5rem] px-3 py-2 transition-all bg-gradient-to-br from-primary to-primary/80 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.15)] border border-primary/20 relative group">
                   <div className="absolute inset-0 bg-white/10 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity"></div>
                   <div className="flex items-center justify-center font-bold text-center w-full z-10">
                      <div className="rounded-[1.25rem] border border-white/40 bg-white/95 backdrop-blur-md px-6 py-3.5 text-[15px] font-bold text-slate-800 shadow-sm w-full break-words text-wrap relative overflow-hidden">
@@ -818,7 +855,7 @@ export default function StudentTestSession() {
             </div>
 
             {/* Parameters Right */}
-            <div className="relative z-10 w-full min-w-[220px] flex-1 space-y-4 px-2 py-4 flex flex-col justify-center">
+            <div className="relative z-10 w-full min-w-[220px] flex-1 space-y-2.5 px-2 py-2 flex flex-col justify-center">
               <h3 className="mb-4 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Treatments/Effects</h3>
               {correctParameters.map((_, i: number) => (
                 <DroppableSlot key={i} label={`Treatment/Effect ${i+1}`} id={`parameters-${i}`} value={state.parameters?.[i]} isExpected={(v: string) => correctParameters.some((c: any) => c.text === v)} />
@@ -830,7 +867,7 @@ export default function StudentTestSession() {
           <div className="pt-4 w-full relative z-10">
             <div className="space-y-4 max-w-5xl mx-auto">
               <div className="flex items-center justify-center">
-                <h3 className="rounded-full bg-slate-800 px-6 py-2 text-xs font-bold uppercase tracking-[0.2em] text-white shadow-lg">Word Bank</h3>
+                <h3 className="rounded-full bg-slate-800 px-4 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-lg">Word Bank</h3>
               </div>
               <DroppableWordBank id="bank-options" className="flex-row flex-wrap justify-center gap-4 items-center">
                 {(() => {
@@ -883,16 +920,16 @@ export default function StudentTestSession() {
 
   return (
     <StudentLayout title="Test Session">
-      <div className="flex min-h-screen flex-col bg-background">
+      <div className="flex h-full flex-col bg-background rounded-[1.5rem] overflow-hidden">
         
         {/* Distraction-Free Header */}
-        <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b border-border bg-background px-6">
-          <div className="flex items-center gap-4">
+        <header className="sticky top-0 z-20 flex flex-col gap-2 border-b border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:flex-row md:items-center md:justify-between transform-gpu">
+          <div className="flex items-center gap-3">
             <button 
               onClick={() => navigate("/student/create-test")}
-              className="grid size-8 place-items-center rounded-full bg-muted text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+              className="grid size-7 place-items-center rounded-full bg-muted text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
             >
-              <X className="size-4" weight="regular" />
+              <X className="size-3.5" weight="regular" />
             </button>
             <div className="h-4 w-px bg-border" />
             <div className="text-sm font-semibold text-muted-foreground">
@@ -931,7 +968,7 @@ export default function StudentTestSession() {
         </header>
 
         {/* Question Area */}
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        <main className="flex-1 overflow-y-auto px-4 py-4 pb-4">
           <div className="mx-auto max-w-5xl">
             
             {timeRemaining === 0 ? (
@@ -954,15 +991,15 @@ export default function StudentTestSession() {
               </div>
             ) : (
               <>
-                <div className="mb-6 flex gap-2">
-                  <span className="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">{activeQuestion.category}</span>
-                  <span className="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">{activeQuestion.subcategory}</span>
+                <div className="mb-2 flex gap-2">
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{activeQuestion.category}</span>
+                  <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{activeQuestion.subcategory}</span>
                 </div>
 
                 {!isSubmitted ? (
                   <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <div 
-                      className="mb-5 text-base font-medium leading-relaxed text-foreground"
+                      className="mb-3 text-sm font-medium leading-relaxed text-foreground"
                       dangerouslySetInnerHTML={{ __html: activeQuestion.type === "next-gen-cloze" ? activeQuestion.text.replace(/{[0-9]+}/g, "_________") : activeQuestion.text }}
                     />
                     {renderContent()}
@@ -1005,56 +1042,55 @@ export default function StudentTestSession() {
               </>
             )}
 
-          </div>
-        </main>
-
-        {/* Footer Actions */}
-        {timeRemaining !== 0 && (
-          <footer className="sticky bottom-0 z-10 border-t border-border bg-background/80 p-6 backdrop-blur">
-            <div className="mx-auto flex max-w-5xl items-center justify-end">
-              
-              {config.mode === 'review' ? (
-                <div className="flex items-center gap-4">
-                  {currentIndex < activePool.length - 1 && (
+            {/* Footer Actions (moved inside main scroll area) */}
+            {timeRemaining !== 0 && (
+              <footer className="w-full mt-8 pb-6 px-2">
+                <div className="flex items-center justify-end">
+                  
+                  {config.mode === 'review' ? (
+                    <div className="flex items-center gap-4">
+                      {currentIndex < activePool.length - 1 && (
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          onClick={handleNext}
+                          className="flex items-center gap-2 rounded-full bg-foreground px-8 py-3 text-sm font-bold text-background shadow-lg transition"
+                        >
+                          Next Question <ChevronRight className="size-4" />
+                        </motion.button>
+                      )}
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => navigate('/student/test-history')}
+                        className="rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition"
+                      >
+                        Exit Review
+                      </motion.button>
+                    </div>
+                  ) : !isSubmitted ? (
+                    <motion.button
+                      whileTap={{ scale: 0.95 }}
+                      disabled={!canSubmit || timeRemaining === 0}
+                      onClick={handleSubmitAnswer}
+                      className="rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition disabled:opacity-50"
+                    >
+                      Submit Answer
+                    </motion.button>
+                  ) : (
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       onClick={handleNext}
                       className="flex items-center gap-2 rounded-full bg-foreground px-8 py-3 text-sm font-bold text-background shadow-lg transition"
                     >
-                      Next Question <ChevronRight className="size-4" />
+                      {currentIndex < activePool.length - 1 ? "Next Question" : "End Session"}
+                      {currentIndex < activePool.length - 1 && <ChevronRight className="size-4" />}
                     </motion.button>
                   )}
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => navigate('/student/test-history')}
-                    className="rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition"
-                  >
-                    Exit Review
-                  </motion.button>
                 </div>
-              ) : !isSubmitted ? (
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  disabled={!canSubmit || timeRemaining === 0}
-                  onClick={handleSubmitAnswer}
-                  className="rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition disabled:opacity-50"
-                >
-                  Submit Answer
-                </motion.button>
-              ) : (
-                <motion.button
-                  whileTap={{ scale: 0.95 }}
-                  onClick={handleNext}
-                  className="flex items-center gap-2 rounded-full bg-foreground px-8 py-3 text-sm font-bold text-background shadow-lg transition"
-                >
-                  {currentIndex < activePool.length - 1 ? "Next Question" : "End Session"}
-                  {currentIndex < activePool.length - 1 && <ChevronRight className="size-4" />}
-                </motion.button>
-              )}
-            </div>
-          </footer>
-        )}
+              </footer>
+            )}
 
+          </div>
+        </main>
       </div>
     </StudentLayout>
   );

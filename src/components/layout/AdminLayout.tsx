@@ -69,20 +69,19 @@ function SidebarLink({ item, currentPath }: { item: Item; currentPath: string })
         className={cn(
           "relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
           isActiveSelf
-            ? "text-sidebar-active-foreground"
-            : "text-sidebar-foreground hover:bg-muted",
+            ? "text-white"
+            : "text-sidebar-foreground hover:bg-muted/50",
         )}
       >
         {isActiveSelf && (
           <motion.div
             layoutId="active-sidebar-pill"
-            className="absolute inset-0 rounded-xl bg-sidebar-active"
+            className="absolute inset-0 rounded-xl bg-gradient-to-r from-teal-500 to-teal-700 shadow-lg shadow-teal-900/20"
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           />
         )}
-        <item.icon className="relative z-10 size-4.5" weight={item.iconWeight} />
+        <item.icon className={cn("relative z-10 size-4.5", !isActiveSelf && "text-teal-600")} weight={item.iconWeight} />
         <span className="relative z-10">{item.label}</span>
-        {isActiveSelf && <span className="relative z-10 ml-auto size-1.5 rounded-full bg-primary" />}
       </Link>
     );
   }
@@ -94,18 +93,18 @@ function SidebarLink({ item, currentPath }: { item: Item; currentPath: string })
         className={cn(
           "relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
           isActiveBranch
-            ? "text-sidebar-active-foreground"
-            : "text-sidebar-foreground hover:bg-muted",
+            ? "text-white"
+            : "text-sidebar-foreground hover:bg-muted/50",
         )}
       >
         {isActiveBranch && (
           <motion.div
             layoutId="active-sidebar-pill"
-            className="absolute inset-0 rounded-xl bg-sidebar-active"
+            className="absolute inset-0 rounded-xl bg-gradient-to-r from-teal-500 to-teal-700 shadow-lg shadow-teal-900/20"
             transition={{ type: "spring", stiffness: 300, damping: 30 }}
           />
         )}
-        <item.icon className="relative z-10 size-4.5" />
+        <item.icon className={cn("relative z-10 size-4.5", !isActiveBranch && "text-teal-600")} />
         <span className="relative z-10">{item.label}</span>
         <ChevronDown
           className={cn("relative z-10 ml-auto size-4 transition-transform", open && "rotate-180")}
@@ -127,7 +126,7 @@ function SidebarLink({ item, currentPath }: { item: Item; currentPath: string })
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="size-3.5" weight={c.iconWeight} />
+                <Icon className={cn("size-3.5", !active && "text-teal-600")} weight={c.iconWeight} />
                 {c.label}
               </Link>
             );
@@ -175,9 +174,10 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   return (
     <LayoutContext.Provider value={{ ...layout, setLayout }}>
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-gradient-to-br from-[#c1e3e4] via-[#e2e8f0] to-[#e4e0f0] p-2 lg:p-3 flex flex-col">
+      <div className="relative flex min-h-[calc(100vh-1rem)] lg:min-h-[calc(100vh-1.5rem)] w-full overflow-hidden rounded-[1.5rem] border border-white/60 bg-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
       {/* Sidebar */}
-      <aside className="fixed inset-y-0 left-0 hidden w-72 flex-col border-r border-sidebar-border bg-sidebar p-5 lg:flex">
+      <aside className="hidden w-72 shrink-0 flex-col border-r border-white/30 p-5 lg:flex">
         <div className="mb-8 flex items-center gap-3 px-1">
           <div className="grid size-11 place-items-center rounded-xl bg-primary text-primary-foreground">
             <Stethoscope className="size-5" />
@@ -197,36 +197,36 @@ export function RootLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        <div className="mt-4 space-y-1 border-t border-sidebar-border pt-4">
+        <div className="mt-4 space-y-1 border-t border-white/30 pt-4">
           <Link
             to="/admin/settings"
             className={cn(
               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
               path === "/admin/settings"
-                ? "bg-sidebar-active text-sidebar-active-foreground"
-                : "text-sidebar-foreground hover:bg-muted",
+                ? "bg-gradient-to-r from-teal-500 to-teal-700 text-white shadow-lg shadow-teal-900/20"
+                : "text-sidebar-foreground hover:bg-muted/50",
             )}
           >
-            <Settings className="size-4.5" /> Settings
+            <Settings className={cn("size-4.5", path !== "/admin/settings" && "text-teal-600")} /> Settings
           </Link>
           <Link
             to="/admin/profile"
             className={cn(
               "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium",
-              path === "/admin/profile" ? "bg-sidebar-active text-sidebar-active-foreground" : "text-sidebar-foreground hover:bg-muted",
+              path === "/admin/profile" ? "bg-gradient-to-r from-teal-500 to-teal-700 text-white shadow-lg shadow-teal-900/20" : "text-sidebar-foreground hover:bg-muted/50",
             )}
           >
-            <Users className="size-4.5" /> Profile
+            <Users className={cn("size-4.5", path !== "/admin/profile" && "text-teal-600")} /> Profile
           </Link>
-          <motion.button onClick={handleLogout} whileTap={{ scale: 0.95 }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-muted">
-            <LogOut className="size-4.5" weight="regular" /> Logout
+          <motion.button onClick={handleLogout} whileTap={{ scale: 0.95 }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-muted/50">
+            <LogOut className="size-4.5 text-teal-600" weight="regular" /> Logout
           </motion.button>
         </div>
       </aside>
 
       {/* Main */}
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-border bg-background/80 px-6 py-5 backdrop-blur xl:flex-row xl:items-center">
+      <div className="flex flex-1 flex-col h-[calc(100vh-1rem)] lg:h-[calc(100vh-1.5rem)] overflow-y-auto scroll-smooth">
+        <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/30 bg-white/30 px-6 py-5 backdrop-blur-md xl:flex-row xl:items-center transform-gpu">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-bold tracking-tight text-foreground">{layout.title}</h1>
             {layout.subtitle && (
@@ -297,9 +297,12 @@ export function RootLayout({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        {layout.actions && <div className="px-6 pt-5">{layout.actions}</div>}
+        <div className="flex-1 pb-10">
+          {layout.actions && <div className="px-6 pt-5">{layout.actions}</div>}
 
-        {children}
+          {children}
+        </div>
+      </div>
       </div>
     </div>
     </LayoutContext.Provider>

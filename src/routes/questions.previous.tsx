@@ -23,6 +23,13 @@ export default PreviousQuestions;
 
 const tabs = ["All", "Published", "Drafts"] as const;
 
+const formatQuestionType = (type: string) => {
+  if (!type) return "";
+  if (type === 'bowtie') return 'next-gen/bow-tie';
+  if (type === 'next-gen-cloze') return 'next-gen/fill in the blank';
+  return type;
+};
+
 function PreviousQuestions() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initCategory = searchParams.get("category") || "All";
@@ -148,7 +155,7 @@ function PreviousQuestions() {
                   onChange={e => setFilterType(e.target.value)}
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  {types.map(t => <option key={t as string} value={t as string}>{t === "All" ? "All Types" : t}</option>)}
+                  {types.map(t => <option key={t as string} value={t as string}>{t === "All" ? "All Types" : formatQuestionType(t as string)}</option>)}
                 </select>
               </div>
               <div className="space-y-2">
@@ -228,7 +235,7 @@ function PreviousQuestions() {
                     <div className="text-xs text-muted-foreground">Updated {new Date(r.created_at).toLocaleDateString()}</div>
                   </td>
                   <td className="p-3 text-center">
-                    <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{r.type}</span>
+                    <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{formatQuestionType(r.type)}</span>
                   </td>
                   <td className="p-3">
                     <div className="font-medium">{r.category}</div>
@@ -380,7 +387,7 @@ function PreviousQuestions() {
           <DialogHeader>
             <DialogTitle>Question Preview</DialogTitle>
             <DialogDescription>
-              {previewQuestion?.category} • {previewQuestion?.subcategory} ({previewQuestion?.type})
+              {previewQuestion?.category} • {previewQuestion?.subcategory} ({formatQuestionType(previewQuestion?.type || "")})
             </DialogDescription>
           </DialogHeader>
           {previewQuestion && (

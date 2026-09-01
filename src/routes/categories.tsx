@@ -1,5 +1,5 @@
 import { AdminLayout } from "@/components/layout/AdminLayout";
-import { TreeStructure as FolderTree, Tag, Plus, PencilSimple as PenSquare, Trash as Trash2, CaretRight as ChevronRight, DotsSixVertical, Check } from "@phosphor-icons/react";
+import { TreeStructure as FolderTree, Tag, Plus, PencilSimple as PenSquare, Trash as Trash2, CaretRight, CaretLeft, CaretRight as ChevronRight, DotsSixVertical, Check } from "@phosphor-icons/react";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,8 @@ export default CategoriesPage;
 function CategoriesPage() {
   const [categories, setCategories] = useState<any[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [subPage, setSubPage] = useState(1);
+  const SUBCATEGORY_PAGE_SIZE = 4;
   const [loading, setLoading] = useState(true);
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [subQuestions, setSubQuestions] = useState<any[]>([]);
@@ -209,7 +211,7 @@ function CategoriesPage() {
     >
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.4fr_1fr]">
         {/* Left — categories grid */}
-        <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="rounded-2xl border border-white/40 bg-white/50 backdrop-blur-md shadow-sm p-6">
           <div className="mb-5 flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Main Categories</h3>
@@ -256,27 +258,35 @@ function CategoriesPage() {
                   exit={{ opacity: 0, scale: 0.95 }}
                   whileTap={{ scale: 0.98 }}
                   key={c.id}
-                  onClick={() => setActiveId(c.id)}
+                  onClick={() => { setActiveId(c.id); setSubPage(1); setExpandedSub(null); }}
                   className={cn(
-                    "group rounded-2xl border p-4 text-left transition-colors",
+                    "group rounded-2xl border p-4 text-left transition-colors flex flex-col h-full",
                     c.id === activeId ? "border-primary bg-primary/5 shadow-sm" : "border-border bg-background hover:border-primary/40",
                   )}
                 >
-                  <div className="mb-6 flex items-start justify-between">
-                  <div className="grid size-10 place-items-center rounded-xl" style={{ backgroundColor: `var(--${c.tone})` }}>
-                    <FolderTree className="size-5 text-foreground/70" />
+                  <div className="mb-4 flex w-full items-start justify-between">
+                    <div className="grid size-10 place-items-center rounded-xl shrink-0" style={{ backgroundColor: `var(--${c.tone})` }}>
+                      <FolderTree className="size-5 text-foreground/70" />
+                    </div>
+                    <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
+                      <span onClick={(e) => openEdit('category', c.id, c.name, e)} className="grid size-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><PenSquare className="size-3.5" /></span>
+                      <span onClick={(e) => openDelete('category', c.id, c.name, e)} className="grid size-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"><Trash2 className="size-3.5" /></span>
+                    </div>
                   </div>
-                  <div className="flex gap-1 opacity-0 transition group-hover:opacity-100">
-                    <span onClick={(e) => openEdit('category', c.id, c.name, e)} className="grid size-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><PenSquare className="size-3.5" /></span>
-                    <span onClick={(e) => openDelete('category', c.id, c.name, e)} className="grid size-7 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"><Trash2 className="size-3.5" /></span>
+                  
+                  <div className="mt-auto">
+                    <div className="font-semibold text-[15px] leading-tight mb-3">{c.name}</div>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-foreground">{c.subcategories?.length || 0}</span>
+                        <span>subcategories</span>
+                      </div>
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-foreground">{c.questions_count || 0}</span>
+                        <span>questions</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-                <div className="font-semibold">{c.name}</div>
-                <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                  <span>{c.subcategories?.length || 0} subcategories</span>
-                  <span>·</span>
-                  <span>{c.questions_count || 0} questions</span>
-                </div>
               </motion.button>
             ))}
             </AnimatePresence>
@@ -285,7 +295,7 @@ function CategoriesPage() {
 
         {/* Right — subcategories panel */}
         {active && (
-          <div className="rounded-2xl border border-border bg-card p-6 h-fit">
+          <div className="rounded-2xl border border-white/40 bg-white/50 backdrop-blur-md shadow-sm p-6">
             <div className="mb-5 flex items-center gap-3">
               <div className="grid size-10 place-items-center rounded-xl" style={{ backgroundColor: `var(--${active.tone})` }}>
                 <Tag className="size-5 text-foreground/70" />
@@ -314,7 +324,7 @@ function CategoriesPage() {
 
             <div className="mt-4 space-y-2">
               <AnimatePresence mode="popLayout">
-                {active.subcategories?.map((s: string, i: number) => (
+                {active.subcategories?.slice((subPage - 1) * SUBCATEGORY_PAGE_SIZE, subPage * SUBCATEGORY_PAGE_SIZE).map((s: string, i: number) => (
                   <motion.div 
                     layout
                     initial={{ opacity: 0, y: 10, scale: 0.98 }}
@@ -325,7 +335,7 @@ function CategoriesPage() {
                     className="group flex flex-col rounded-xl border border-border bg-background overflow-hidden"
                   >
                     <div className="flex items-center gap-3 p-3">
-                      <div className="grid size-8 place-items-center rounded-lg bg-muted text-xs font-semibold">{String(i + 1).padStart(2, "0")}</div>
+                      <div className="grid size-8 place-items-center rounded-lg bg-muted text-xs font-semibold">{String((subPage - 1) * SUBCATEGORY_PAGE_SIZE + i + 1).padStart(2, "0")}</div>
                       <div className="flex-1">
                         <div className="font-medium">{s}</div>
                         <div className="text-xs text-muted-foreground">{active.subcategories_counts?.[s] || 0} questions</div>
@@ -381,6 +391,33 @@ function CategoriesPage() {
                 ))}
               </AnimatePresence>
             </div>
+
+            {Math.ceil((active.subcategories?.length || 0) / SUBCATEGORY_PAGE_SIZE) > 1 && (
+              <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+                <div className="text-xs text-muted-foreground font-medium">
+                  Showing <span className="text-foreground">{(subPage - 1) * SUBCATEGORY_PAGE_SIZE + 1}</span> to <span className="text-foreground">{Math.min(subPage * SUBCATEGORY_PAGE_SIZE, active.subcategories?.length || 0)}</span> of <span className="text-foreground">{active.subcategories?.length || 0}</span>
+                </div>
+                <div className="flex items-center gap-1.5 bg-muted/30 p-1 rounded-xl border border-white/20">
+                  <button
+                    onClick={() => setSubPage(p => Math.max(1, p - 1))}
+                    disabled={subPage === 1}
+                    className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm disabled:pointer-events-none disabled:opacity-40 transition-all"
+                  >
+                    <CaretLeft className="size-4" weight="bold" />
+                  </button>
+                  <div className="grid min-w-8 px-2 h-8 place-items-center rounded-lg bg-primary text-primary-foreground text-xs font-bold shadow-sm">
+                    {subPage}
+                  </div>
+                  <button
+                    onClick={() => setSubPage(p => Math.min(Math.ceil((active.subcategories?.length || 0) / SUBCATEGORY_PAGE_SIZE), p + 1))}
+                    disabled={subPage === Math.ceil((active.subcategories?.length || 0) / SUBCATEGORY_PAGE_SIZE)}
+                    className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-background hover:text-foreground hover:shadow-sm disabled:pointer-events-none disabled:opacity-40 transition-all"
+                  >
+                    <CaretRight className="size-4" weight="bold" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

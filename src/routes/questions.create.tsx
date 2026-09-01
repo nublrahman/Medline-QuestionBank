@@ -133,6 +133,8 @@ function CreateQuestion() {
   const [clozeBlanks, setClozeBlanks] = useState<Record<string, { options: string[], correct: string }>>({
     "1": { options: ["", "", ""], correct: "" }
   });
+  const [clozeDependentMode, setClozeDependentMode] = useState(false);
+  const [clozeGroupedCombinations, setClozeGroupedCombinations] = useState<Array<{ blank1: string, connectedOptions: string[] }>>([]);
   const [rationale, setRationale] = useState("");
   const [tabs, setTabs] = useState(["Patient Information", "Vitals", "Current Medications"]);
 
@@ -158,6 +160,20 @@ function CreateQuestion() {
             parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
           });
           setClozeBlanks(qData.options?.blanks || { "1": { options: ["", "", ""], correct: "" } });
+          setClozeDependentMode(qData.options?.clozeDependentMode || false);
+          let loadedCombos = qData.options?.clozeCombinations || [];
+          if (loadedCombos.length > 0 && typeof loadedCombos[0].blank2 !== 'undefined') {
+            const migrated: any[] = [];
+            for (const c of loadedCombos) {
+              let g = migrated.find(x => x.blank1 === c.blank1);
+              if (!g) { g = { blank1: c.blank1, connectedOptions: [] }; migrated.push(g); }
+              if (c.blank2 && !g.connectedOptions.includes(c.blank2)) {
+                g.connectedOptions.push(c.blank2);
+              }
+            }
+            loadedCombos = migrated;
+          }
+          setClozeGroupedCombinations(loadedCombos.map((c: any) => ({...c, connectedOptions: c.connectedOptions || []})));
           setRationale(qData.rationale || "");
           setGroup(qData.group_type || "ungrouped");
           setMarking(qData.marking_scheme || "zero-one");
@@ -181,6 +197,8 @@ function CreateQuestion() {
           parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
         });
         setClozeBlanks({ "1": { options: ["", "", ""], correct: "" } });
+        setClozeDependentMode(false);
+        setClozeGroupedCombinations([]);
         setRationale("");
         setGroup("ungrouped");
         setMarking("zero-one");
@@ -249,8 +267,18 @@ function CreateQuestion() {
           toast.error(`Blank {${id}} has empty options.`);
           return;
         }
-        if (!blank.correct) {
+        if (!clozeDependentMode && !blank.correct) {
           toast.error(`Please select a correct answer for blank {${id}}.`);
+          return;
+        }
+      }
+      if (clozeDependentMode) {
+        if (blankIds.length !== 2) {
+          toast.error("Dependent combinations currently require exactly 2 blanks (e.g. {1} and {2}).");
+          return;
+        }
+        if (clozeGroupedCombinations.length === 0) {
+          toast.error("Please define at least one valid dependent combination.");
           return;
         }
       }
@@ -269,7 +297,7 @@ function CreateQuestion() {
         subcategory,
         difficulty,
         stem,
-        options: type === "bowtie" ? bowtieConfig : (type === "next-gen-cloze" ? { blanks: clozeBlanks } : (type.startsWith("mcq") ? options : null)),
+        options: type === "bowtie" ? bowtieConfig : (type === "next-gen-cloze" ? { blanks: clozeBlanks, clozeDependentMode, clozeCombinations: clozeGroupedCombinations } : (type.startsWith("mcq") ? options : null)),
         rationale,
         group_type: group,
         marking_scheme: marking,
@@ -642,6 +670,84 @@ function CreateQuestion() {
                     >
                       <Plus className="size-4" /> Add New Blank
                     </button>
+
+                    <div className="pt-6 border-t border-border mt-6">
+                      <label className="flex items-center gap-2 text-sm font-semibold mb-4">
+                        <input
+                          type="checkbox"
+                          checked={clozeDependentMode}
+                          onChange={(e) => setClozeDependentMode(e.target.checked)}
+                          className="size-4 accent-primary"
+                        />
+                        Enable Dependent Combination Scoring (requires exactly 2 blanks)
+                      </label>
+
+                      {clozeDependentMode && (
+                        <div className="space-y-6">
+                          <p className="text-xs text-muted-foreground">For each option in Blank 1, select which options should be visible in Blank 2.</p>
+                          {clozeGroupedCombinations.map((group, gIdx) => (
+                            <div key={gIdx} className="rounded-xl border border-border bg-card overflow-hidden">
+                              <div className="bg-muted/40 p-4 border-b border-border flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-semibold text-foreground">If student selects:</span>
+                                  <select
+                                    value={group.blank1}
+                                    onChange={(e) => {
+                                      const newG = [...clozeGroupedCombinations];
+                                      newG[gIdx].blank1 = e.target.value;
+                                      setClozeGroupedCombinations(newG);
+                                    }}
+                                    className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background font-semibold min-w-[200px]"
+                                  >
+                                    <option value="" disabled>Select option for Blank {Object.keys(clozeBlanks)[0]}</option>
+                                    {(clozeBlanks[Object.keys(clozeBlanks)[0]]?.options || []).filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
+                                  </select>
+                                </div>
+                                <button
+                                  onClick={() => setClozeGroupedCombinations(clozeGroupedCombinations.filter((_, idx) => idx !== gIdx))}
+                                  className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition"
+                                >
+                                  <Trash2 className="size-4" />
+                                </button>
+                              </div>
+                              <div className="p-4">
+                                <p className="text-sm font-medium mb-3 text-muted-foreground">Blank 2 connected options:</p>
+                                <div className="flex flex-col gap-2 pl-2">
+                                  {(clozeBlanks[Object.keys(clozeBlanks)[1]]?.options || []).filter(Boolean).map(opt => (
+                                    <label key={opt} className="flex items-center gap-3 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded-md transition-colors border border-transparent hover:border-border">
+                                      <input
+                                        type="checkbox"
+                                        checked={group.connectedOptions.includes(opt)}
+                                        onChange={(e) => {
+                                          const newG = [...clozeGroupedCombinations];
+                                          if (e.target.checked) {
+                                            newG[gIdx].connectedOptions.push(opt);
+                                          } else {
+                                            newG[gIdx].connectedOptions = newG[gIdx].connectedOptions.filter(o => o !== opt);
+                                          }
+                                          setClozeGroupedCombinations(newG);
+                                        }}
+                                        className="size-4 rounded accent-primary border-input"
+                                      />
+                                      <span className="font-medium text-foreground">{opt}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                                {group.connectedOptions.length === 0 && (
+                                  <p className="text-xs text-destructive mt-2 pl-2">Please select at least one connected option.</p>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => setClozeGroupedCombinations([...clozeGroupedCombinations, { blank1: "", connectedOptions: [] }])}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-2 text-sm font-medium text-primary hover:bg-muted"
+                          >
+                            <Plus className="size-4" /> Add Blank 1 Group
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </Section>
               )}
@@ -802,7 +908,7 @@ function CreateQuestion() {
         </div>
 
         {/* Right rail */}
-        <aside className="space-y-5">
+        <aside className="flex flex-col gap-5 lg:sticky lg:top-8 h-[calc(100vh-4rem)]">
           <Section title="Preview Summary" desc={undefined}>
             <dl className="space-y-3 text-sm">
               {[
@@ -822,22 +928,24 @@ function CreateQuestion() {
             </dl>
           </Section>
 
-          <Section title="Publish" desc="Save as draft to refine later, or publish to make it available in active mock exams.">
-            <button
-              onClick={() => handlePublish("published")}
-              disabled={isPublishing}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-            >
-              <Send className="size-4" /> {isPublishing ? "Saving..." : "Publish Question"}
-            </button>
-            <button
-              onClick={() => handlePublish("draft")}
-              disabled={isPublishing}
-              className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
-            >
-              <Save className="size-4" /> Save as draft
-            </button>
-          </Section>
+          <div className="mt-auto">
+            <Section title="Publish" desc="Save as draft to refine later, or publish to make it available in active mock exams.">
+              <button
+                onClick={() => handlePublish("published")}
+                disabled={isPublishing}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+              >
+                <Send className="size-4" /> {isPublishing ? "Saving..." : "Publish Question"}
+              </button>
+              <button
+                onClick={() => handlePublish("draft")}
+                disabled={isPublishing}
+                className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 py-2.5 text-sm font-semibold disabled:opacity-50"
+              >
+                <Save className="size-4" /> Save as draft
+              </button>
+            </Section>
+          </div>
         </aside>
       </div>
     </AdminLayout>
