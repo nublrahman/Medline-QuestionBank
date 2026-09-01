@@ -69,15 +69,17 @@ function Stepper({ active }: { active: number }) {
   );
 }
 
-function Pill({ active, onClick, children }: any) {
+function Pill({ active, onClick, children, disabled }: any) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         "rounded-full border px-4 py-2 text-sm font-medium transition",
         active
           ? "border-primary bg-primary/10 text-primary"
           : "border-border bg-background text-foreground hover:border-primary/40",
+        disabled && "opacity-50 cursor-not-allowed pointer-events-none"
       )}
     >
       {children}
@@ -224,13 +226,13 @@ function CreateQuestion() {
         toast.error("Please fill in at least 2 Causes/Treatments and 1 Core Condition.");
         return;
       }
-      const correctConditions = bowtieConfig.conditions.filter((c: any) => c.isCorrect);
+      const correctConditions = conditions.filter((c: any) => c.isCorrect);
       if (correctConditions.length !== 1) {
-        toast.error("There must be exactly 1 correct Potential Condition.");
+        toast.error("There must be exactly 1 correct Potential Condition (cannot be empty).");
         return;
       }
-      if (!bowtieConfig.actions.some((a: any) => a.isCorrect) || !bowtieConfig.parameters.some((p: any) => p.isCorrect)) {
-        toast.error("Please mark at least one correct Action and one correct Parameter.");
+      if (!actions.some((a: any) => a.isCorrect) || !parameters.some((p: any) => p.isCorrect)) {
+        toast.error("Please mark at least one correct Action and one correct Parameter (cannot be empty).");
         return;
       }
     } else if (type === "next-gen-cloze") {
@@ -379,7 +381,7 @@ function CreateQuestion() {
                     <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Traditional</div>
                     <div className="flex flex-wrap gap-2">
                       {questionTypes.traditional.map((t) => (
-                        <Pill key={t.id} active={type === t.id} onClick={() => setType(t.id)}>{t.name}</Pill>
+                        <Pill key={t.id} active={type === t.id} disabled={!!editId} onClick={() => setType(t.id)}>{t.name}</Pill>
                       ))}
                     </div>
                   </div>
@@ -392,6 +394,7 @@ function CreateQuestion() {
                           <Pill 
                             key={t.id} 
                             active={type === t.id} 
+                            disabled={!!editId}
                             onClick={() => { if (isEnabled) setType(t.id); }}
                           >
                             <span className={cn(!isEnabled && "opacity-50 pointer-events-none")}>{t.name}</span>
@@ -764,13 +767,13 @@ function CreateQuestion() {
                         toast.error("Please fill in at least 2 Causes/Treatments and 1 Core Condition.");
                         return;
                       }
-                      const correctConditions = bowtieConfig.conditions.filter((c: any) => c.isCorrect);
+                      const correctConditions = conditions.filter((c: any) => c.isCorrect);
                       if (correctConditions.length !== 1) {
-                        toast.error("There must be exactly 1 correct Potential Condition.");
+                        toast.error("There must be exactly 1 correct Potential Condition (cannot be empty).");
                         return;
                       }
-                      if (!bowtieConfig.actions.some((a: any) => a.isCorrect) || !bowtieConfig.parameters.some((p: any) => p.isCorrect)) {
-                        toast.error("Please mark at least one correct Action and one correct Parameter.");
+                      if (!actions.some((a: any) => a.isCorrect) || !parameters.some((p: any) => p.isCorrect)) {
+                        toast.error("Please mark at least one correct Action and one correct Parameter (cannot be empty).");
                         return;
                       }
                     }

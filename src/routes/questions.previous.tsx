@@ -7,6 +7,17 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default PreviousQuestions;
 
@@ -31,7 +42,6 @@ function PreviousQuestions() {
   const navigate = useNavigate();
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this question?")) return;
     try {
       const { error } = await supabase.from('questions').delete().eq('id', id);
       if (error) throw error;
@@ -214,7 +224,7 @@ function PreviousQuestions() {
                 <tr key={r.id} className="bg-card hover:bg-muted/40">
                   <td className="p-3 pl-4 font-mono text-xs text-muted-foreground">{(currentPage - 1) * itemsPerPage + i + 1}</td>
                   <td className="p-3">
-                    <div className="font-medium line-clamp-1">{r.stem.replace(/<[^>]*>?/gm, '').substring(0, 50)}...</div>
+                    <div className="font-medium line-clamp-1">{r.stem?.replace(/<[^>]*>?/gm, '').substring(0, 50)}...</div>
                     <div className="text-xs text-muted-foreground">Updated {new Date(r.created_at).toLocaleDateString()}</div>
                   </td>
                   <td className="p-3 text-center">
@@ -231,7 +241,23 @@ function PreviousQuestions() {
                     <div className="flex justify-end gap-1.5">
                       <IconBtn onClick={() => setPreviewQuestion(r)}><Eye className="size-4" /></IconBtn>
                       <IconBtn onClick={() => navigate(`/admin/questions/create?edit=${r.id}`)}><PenSquare className="size-4" /></IconBtn>
-                      <IconBtn danger onClick={() => handleDelete(r.id)}><Trash2 className="size-4" /></IconBtn>
+                      <AlertDialog>
+                        <AlertDialogTrigger className="grid size-8 place-items-center rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10">
+                          <Trash2 className="size-4" />
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This action cannot be undone. This will permanently delete this question.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(r.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </td>
                 </tr>
@@ -359,19 +385,29 @@ function PreviousQuestions() {
           </DialogHeader>
           {previewQuestion && (
             <div className="mt-4">
-              <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed mb-6" dangerouslySetInnerHTML={{ __html: previewQuestion.stem }} />
+              <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed mb-6" dangerouslySetInnerHTML={{ __html: previewQuestion.stem || "" }} />
               <div className="space-y-2 mb-6">
-                {previewQuestion.options?.map((o: any) => (
+                {previewQuestion.type?.startsWith("mcq") ? previewQuestion.options?.map((o: any) => (
                   <div key={o.letter} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", o.correct ? "border-success/40 bg-success/5" : "border-border")}>
-                    <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold">{o.letter}</div>
-                    <span>{o.text}</span>
+                    <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold shrink-0">{o.letter}</div>
+                    <span className="flex-1 break-words min-w-0">{o.text}</span>
                     {o.correct && <Check className="ml-auto size-4 text-success-foreground" />}
                   </div>
-                ))}
+                )) : previewQuestion.type === "bowtie" ? (
+                  <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
+                    <div className="font-semibold text-primary mb-2">Advanced Bow-Tie Configured</div>
+                    <p className="text-muted-foreground">Causes/Assessments: {previewQuestion.options?.actions?.length || 0} | Core Condition: {previewQuestion.options?.conditions?.length || 0} | Treatments/Effects: {previewQuestion.options?.parameters?.length || 0}</p>
+                  </div>
+                ) : previewQuestion.type === "next-gen-cloze" && (
+                  <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
+                    <div className="font-semibold text-primary mb-2">Fill in the Blank Dropdown Configured</div>
+                    <p className="text-muted-foreground">Configured Blanks: {previewQuestion.options?.blanks ? Object.keys(previewQuestion.options.blanks).length : 0}</p>
+                  </div>
+                )}
               </div>
               <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
                 <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
-                <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale }} />
+                <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
               </div>
             </div>
           )}

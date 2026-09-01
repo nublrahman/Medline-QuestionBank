@@ -1,6 +1,17 @@
 ;
 import { AdminLayout } from "@/components/layout/AdminLayout";
 import { Copy, Plus, Ticket, Trash as Trash2 } from "@phosphor-icons/react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { supabase } from "@/lib/supabase";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -63,7 +74,6 @@ function CodesPage() {
   };
 
   const deleteCode = async (code: string) => {
-    if (!confirm(`Are you sure you want to delete ${code}?`)) return;
     try {
       const { error } = await supabase.from('invitation_codes').delete().eq('code', code);
       if (error) throw error;
@@ -173,7 +183,23 @@ function CodesPage() {
                     <td className="p-3 pr-4">
                       <div className="flex justify-end gap-1.5">
                         <button onClick={() => { navigator.clipboard.writeText(c.code); toast.success("Code copied to clipboard!"); }} className="grid size-8 place-items-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-4" /></button>
-                        <button onClick={() => deleteCode(c.code)} className="grid size-8 place-items-center rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10"><Trash2 className="size-4" /></button>
+                        <AlertDialog>
+                          <AlertDialogTrigger className="grid size-8 place-items-center rounded-lg border border-border bg-background text-destructive hover:bg-destructive/10">
+                            <Trash2 className="size-4" />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete Invitation Code?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete the code <strong className="text-foreground">{c.code}</strong>? This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteCode(c.code)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </td>
                   </tr>
