@@ -129,8 +129,8 @@ function ProfilePage() {
           )}
         </div>
 
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-border bg-card p-6">
+        <div className="flex flex-col h-full">
+          <div className="rounded-2xl border border-border bg-card p-6 flex-1">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-semibold">Personal information</h3>
               {!isEditing && (

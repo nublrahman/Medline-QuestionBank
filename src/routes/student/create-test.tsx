@@ -399,7 +399,7 @@ function OptionCard({
         <Icon className={cn("size-5", selected && !disabled ? "text-primary" : "text-muted-foreground")} />
         {selected && !disabled && (
           <motion.div layoutId={`check-${title}`} className="grid size-5 place-items-center rounded-full bg-primary text-primary-foreground">
-            <Check className="size-3" />
+            <Check className="size-3" weight="bold" />
           </motion.div>
         )}
         {comingSoon && (

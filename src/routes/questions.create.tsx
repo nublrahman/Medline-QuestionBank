@@ -133,8 +133,7 @@ function CreateQuestion() {
   const [clozeBlanks, setClozeBlanks] = useState<Record<string, { options: string[], correct: string }>>({
     "1": { options: ["", "", ""], correct: "" }
   });
-  const [clozeDependentMode, setClozeDependentMode] = useState(false);
-  const [clozeGroupedCombinations, setClozeGroupedCombinations] = useState<Array<{ blank1: string, connectedOptions: string[] }>>([]);
+  const [clozeDependencies, setClozeDependencies] = useState<Array<{ sourceBlankId: string, targetBlankId: string, mapping: Record<string, string[]> }>>([]);
   const [rationale, setRationale] = useState("");
   const [tabs, setTabs] = useState(["Patient Information", "Vitals", "Current Medications"]);
 
@@ -160,20 +159,7 @@ function CreateQuestion() {
             parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
           });
           setClozeBlanks(qData.options?.blanks || { "1": { options: ["", "", ""], correct: "" } });
-          setClozeDependentMode(qData.options?.clozeDependentMode || false);
-          let loadedCombos = qData.options?.clozeCombinations || [];
-          if (loadedCombos.length > 0 && typeof loadedCombos[0].blank2 !== 'undefined') {
-            const migrated: any[] = [];
-            for (const c of loadedCombos) {
-              let g = migrated.find(x => x.blank1 === c.blank1);
-              if (!g) { g = { blank1: c.blank1, connectedOptions: [] }; migrated.push(g); }
-              if (c.blank2 && !g.connectedOptions.includes(c.blank2)) {
-                g.connectedOptions.push(c.blank2);
-              }
-            }
-            loadedCombos = migrated;
-          }
-          setClozeGroupedCombinations(loadedCombos.map((c: any) => ({...c, connectedOptions: c.connectedOptions || []})));
+          setClozeDependencies(qData.options?.clozeDependencies || []);
           setRationale(qData.rationale || "");
           setGroup(qData.group_type || "ungrouped");
           setMarking(qData.marking_scheme || "zero-one");
@@ -197,8 +183,7 @@ function CreateQuestion() {
           parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
         });
         setClozeBlanks({ "1": { options: ["", "", ""], correct: "" } });
-        setClozeDependentMode(false);
-        setClozeGroupedCombinations([]);
+        setClozeDependencies([]);
         setRationale("");
         setGroup("ungrouped");
         setMarking("zero-one");
@@ -235,11 +220,22 @@ function CreateQuestion() {
         toast.error("All answer options must be filled.");
         return;
       }
+      const texts = options.map(o => o.text.trim().toLowerCase());
+      if (new Set(texts).size !== texts.length) {
+        toast.error("Duplicate answer options are not allowed.");
+        return;
+      }
     } else if (type === "bowtie") {
       const actions = bowtieConfig.actions?.filter((a: any) => !isEmpty(a.text)) || [];
       const conditions = bowtieConfig.conditions?.filter((c: any) => !isEmpty(c.text)) || [];
       const parameters = bowtieConfig.parameters?.filter((p: any) => !isEmpty(p.text)) || [];
       
+      const allTexts = [...actions, ...conditions, ...parameters].map(x => x.text.trim().toLowerCase());
+      if (new Set(allTexts).size !== allTexts.length) {
+        toast.error("Duplicate options are not allowed across Bow-Tie columns.");
+        return;
+      }
+
       if (actions.length < 2 || conditions.length < 1 || parameters.length < 2) {
         toast.error("Please fill in at least 2 Causes/Treatments and 1 Core Condition.");
         return;
@@ -267,19 +263,30 @@ function CreateQuestion() {
           toast.error(`Blank {${id}} has empty options.`);
           return;
         }
-        if (!clozeDependentMode && !blank.correct) {
+        const texts = blank.options.map(o => o.trim().toLowerCase());
+        if (new Set(texts).size !== texts.length) {
+          toast.error(`Blank {${id}} contains duplicate options.`);
+          return;
+        }
+        if (!blank.correct) {
           toast.error(`Please select a correct answer for blank {${id}}.`);
           return;
         }
       }
-      if (clozeDependentMode) {
-        if (blankIds.length !== 2) {
-          toast.error("Dependent combinations currently require exactly 2 blanks (e.g. {1} and {2}).");
-          return;
-        }
-        if (clozeGroupedCombinations.length === 0) {
-          toast.error("Please define at least one valid dependent combination.");
-          return;
+      if (clozeDependencies && clozeDependencies.length > 0) {
+        for (const dep of clozeDependencies) {
+          if (!dep.sourceBlankId || !dep.targetBlankId) {
+            toast.error("Please select a source and target blank for all dependency rules.");
+            return;
+          }
+          if (dep.sourceBlankId === dep.targetBlankId) {
+            toast.error(`Blank {${dep.sourceBlankId}} cannot depend on itself.`);
+            return;
+          }
+          if (Object.keys(dep.mapping).length === 0) {
+            toast.error(`Please map at least one option for the dependency between Blank {${dep.sourceBlankId}} and Blank {${dep.targetBlankId}}.`);
+            return;
+          }
         }
       }
     }
@@ -297,7 +304,7 @@ function CreateQuestion() {
         subcategory,
         difficulty,
         stem,
-        options: type === "bowtie" ? bowtieConfig : (type === "next-gen-cloze" ? { blanks: clozeBlanks, clozeDependentMode, clozeCombinations: clozeGroupedCombinations } : (type.startsWith("mcq") ? options : null)),
+        options: type === "bowtie" ? bowtieConfig : (type === "next-gen-cloze" ? { blanks: clozeBlanks, clozeDependencies } : (type.startsWith("mcq") ? options : null)),
         rationale,
         group_type: group,
         marking_scheme: marking,
@@ -409,7 +416,14 @@ function CreateQuestion() {
                     <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Traditional</div>
                     <div className="flex flex-wrap gap-2">
                       {questionTypes.traditional.map((t) => (
-                        <Pill key={t.id} active={type === t.id} disabled={!!editId} onClick={() => setType(t.id)}>{t.name}</Pill>
+                        <Pill 
+                          key={t.id} 
+                          active={type === t.id} 
+                          disabled={!!editId && !type.startsWith("mcq")} 
+                          onClick={() => setType(t.id)}
+                        >
+                          {t.name}
+                        </Pill>
                       ))}
                     </div>
                   </div>
@@ -624,7 +638,7 @@ function CreateQuestion() {
                                 onChange={(e) => {
                                   const newOptions = [...blank.options];
                                   newOptions[i] = e.target.value;
-                                  setClozeBlanks({ ...clozeBlanks, [id]: { ...blank, options: newOptions, correct: blank.correct === opt ? e.target.value : blank.correct } });
+                                  setClozeBlanks({ ...clozeBlanks, [id]: { ...blank, options: newOptions, correct: (blank.correct === opt && opt !== "") ? e.target.value : blank.correct } });
                                 }}
                                 className="flex-1 bg-transparent text-sm outline-none px-2"
                                 placeholder={`Option ${i + 1}`}
@@ -672,81 +686,94 @@ function CreateQuestion() {
                     </button>
 
                     <div className="pt-6 border-t border-border mt-6">
-                      <label className="flex items-center gap-2 text-sm font-semibold mb-4">
-                        <input
-                          type="checkbox"
-                          checked={clozeDependentMode}
-                          onChange={(e) => setClozeDependentMode(e.target.checked)}
-                          className="size-4 accent-primary"
-                        />
-                        Enable Dependent Combination Scoring (requires exactly 2 blanks)
-                      </label>
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-sm font-semibold text-foreground">Inter-Blank Dependencies (Optional)</h4>
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-6">Create rules for multi-part blanks. For example, make Blank 2's options depend on the student's answer for Blank 1.</p>
 
-                      {clozeDependentMode && (
-                        <div className="space-y-6">
-                          <p className="text-xs text-muted-foreground">For each option in Blank 1, select which options should be visible in Blank 2.</p>
-                          {clozeGroupedCombinations.map((group, gIdx) => (
-                            <div key={gIdx} className="rounded-xl border border-border bg-card overflow-hidden">
-                              <div className="bg-muted/40 p-4 border-b border-border flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-semibold text-foreground">If student selects:</span>
-                                  <select
-                                    value={group.blank1}
-                                    onChange={(e) => {
-                                      const newG = [...clozeGroupedCombinations];
-                                      newG[gIdx].blank1 = e.target.value;
-                                      setClozeGroupedCombinations(newG);
-                                    }}
-                                    className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background font-semibold min-w-[200px]"
-                                  >
-                                    <option value="" disabled>Select option for Blank {Object.keys(clozeBlanks)[0]}</option>
-                                    {(clozeBlanks[Object.keys(clozeBlanks)[0]]?.options || []).filter(Boolean).map(o => <option key={o} value={o}>{o}</option>)}
-                                  </select>
-                                </div>
-                                <button
-                                  onClick={() => setClozeGroupedCombinations(clozeGroupedCombinations.filter((_, idx) => idx !== gIdx))}
-                                  className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition"
+                      <div className="space-y-6">
+                        {clozeDependencies.map((dep, dIdx) => (
+                          <div key={dIdx} className="rounded-xl border border-border bg-card overflow-hidden">
+                            <div className="bg-muted/40 p-4 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
+                              <div className="flex flex-col md:flex-row md:items-center gap-3">
+                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">Source Blank:</span>
+                                <select
+                                  value={dep.sourceBlankId}
+                                  onChange={(e) => {
+                                    const newD = [...clozeDependencies];
+                                    newD[dIdx].sourceBlankId = e.target.value;
+                                    setClozeDependencies(newD);
+                                  }}
+                                  className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background font-semibold"
                                 >
-                                  <Trash2 className="size-4" />
-                                </button>
+                                  <option value="" disabled>Select source blank</option>
+                                  {Object.keys(clozeBlanks).map(bId => <option key={bId} value={bId} disabled={bId === dep.targetBlankId}>Blank {bId}</option>)}
+                                </select>
+                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">determines Target Blank:</span>
+                                <select
+                                  value={dep.targetBlankId}
+                                  onChange={(e) => {
+                                    const newD = [...clozeDependencies];
+                                    newD[dIdx].targetBlankId = e.target.value;
+                                    setClozeDependencies(newD);
+                                  }}
+                                  className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background font-semibold"
+                                >
+                                  <option value="" disabled>Select target blank</option>
+                                  {Object.keys(clozeBlanks).map(bId => <option key={bId} value={bId}>Blank {bId}</option>)}
+                                </select>
                               </div>
-                              <div className="p-4">
-                                <p className="text-sm font-medium mb-3 text-muted-foreground">Blank 2 connected options:</p>
-                                <div className="flex flex-col gap-2 pl-2">
-                                  {(clozeBlanks[Object.keys(clozeBlanks)[1]]?.options || []).filter(Boolean).map(opt => (
-                                    <label key={opt} className="flex items-center gap-3 text-sm cursor-pointer hover:bg-muted/50 p-2 rounded-md transition-colors border border-transparent hover:border-border">
-                                      <input
-                                        type="checkbox"
-                                        checked={group.connectedOptions.includes(opt)}
-                                        onChange={(e) => {
-                                          const newG = [...clozeGroupedCombinations];
-                                          if (e.target.checked) {
-                                            newG[gIdx].connectedOptions.push(opt);
-                                          } else {
-                                            newG[gIdx].connectedOptions = newG[gIdx].connectedOptions.filter(o => o !== opt);
-                                          }
-                                          setClozeGroupedCombinations(newG);
-                                        }}
-                                        className="size-4 rounded accent-primary border-input"
-                                      />
-                                      <span className="font-medium text-foreground">{opt}</span>
-                                    </label>
-                                  ))}
-                                </div>
-                                {group.connectedOptions.length === 0 && (
-                                  <p className="text-xs text-destructive mt-2 pl-2">Please select at least one connected option.</p>
-                                )}
-                              </div>
+                              <button
+                                onClick={() => setClozeDependencies(clozeDependencies.filter((_, idx) => idx !== dIdx))}
+                                className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition self-end md:self-auto"
+                              >
+                                <Trash2 className="size-4" />
+                              </button>
                             </div>
-                          ))}
-                          <button
-                            onClick={() => setClozeGroupedCombinations([...clozeGroupedCombinations, { blank1: "", connectedOptions: [] }])}
-                            className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-2 text-sm font-medium text-primary hover:bg-muted"
-                          >
-                            <Plus className="size-4" /> Add Blank 1 Group
-                          </button>
-                        </div>
-                      )}
+                            
+                            {dep.sourceBlankId && dep.targetBlankId && (
+                              <div className="p-4 space-y-4">
+                                <p className="text-sm font-medium text-muted-foreground">For each option in Blank {dep.sourceBlankId}, select which options are available in Blank {dep.targetBlankId}:</p>
+                                
+                                {clozeBlanks[dep.sourceBlankId]?.options.filter(Boolean).map(sourceOpt => (
+                                  <div key={sourceOpt} className="bg-background rounded-lg border border-border p-3">
+                                    <p className="text-sm font-bold text-primary mb-2">If student selects: "{sourceOpt}"</p>
+                                    <div className="flex flex-wrap gap-2">
+                                      {clozeBlanks[dep.targetBlankId]?.options.filter(Boolean).map(targetOpt => (
+                                        <label key={targetOpt} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted p-1.5 pr-3 rounded border border-border transition-colors">
+                                          <input
+                                            type="checkbox"
+                                            checked={dep.mapping[sourceOpt]?.includes(targetOpt) || false}
+                                            onChange={(e) => {
+                                              const newD = [...clozeDependencies];
+                                              const currentMap = newD[dIdx].mapping[sourceOpt] || [];
+                                              if (e.target.checked) {
+                                                newD[dIdx].mapping = { ...newD[dIdx].mapping, [sourceOpt]: [...currentMap, targetOpt] };
+                                              } else {
+                                                newD[dIdx].mapping = { ...newD[dIdx].mapping, [sourceOpt]: currentMap.filter(o => o !== targetOpt) };
+                                              }
+                                              setClozeDependencies(newD);
+                                            }}
+                                            className="size-3.5 rounded accent-primary"
+                                          />
+                                          <span>{targetOpt}</span>
+                                        </label>
+                                      ))}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        
+                        <button
+                          onClick={() => setClozeDependencies([...clozeDependencies, { sourceBlankId: "", targetBlankId: "", mapping: {} }])}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-2 text-sm font-medium text-primary hover:bg-muted"
+                        >
+                          <Plus className="size-4" /> Add Dependency Rule
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </Section>
@@ -767,7 +794,7 @@ function CreateQuestion() {
                 <div className="rounded-2xl border border-border bg-background p-6">
                   <div className="mb-3 flex items-center gap-2 text-xs">
                     <span className="rounded-full bg-secondary px-2.5 py-1 font-semibold text-secondary-foreground">{group === "grouped" ? "Grouped" : "Ungrouped"}</span>
-                    <span className="rounded-full bg-info/15 px-2.5 py-1 font-semibold text-info-foreground">{type.replace(/-/g, " ").toUpperCase()}</span>
+                    <span className="rounded-full bg-info/15 px-2.5 py-1 font-semibold text-info-foreground">{type === "bowtie" ? "BOW-TIE" : type.replace(/-/g, " ").toUpperCase()}</span>
                     <span className="text-muted-foreground">{category} • {subcategory}</span>
                   </div>
                   <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: type === "next-gen-cloze" ? stem.replace(/{[0-9]+}/g, "_________") : stem }} />
@@ -913,7 +940,7 @@ function CreateQuestion() {
             <dl className="space-y-3 text-sm">
               {[
                 ["Group", group === "grouped" ? "Grouped" : "Ungrouped"],
-                ["Type", type.replace(/-/g, " ")],
+                ["Type", type === "next-gen-cloze" ? "next-gen/fill in the blank dropdown" : type === "bowtie" ? "next-gen/bow-tie" : type.replace(/-/g, " ")],
                 ["Marking", marking === "zero-one" ? "Zero-One" : "Plus / Minus"],
                 ["Category", category],
                 ["Subcategory", subcategory],

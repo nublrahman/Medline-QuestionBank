@@ -7,6 +7,7 @@ import { X, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CheckCircle as
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function StudentTestSession() {
   const navigate = useNavigate();
@@ -322,10 +323,12 @@ export default function StudentTestSession() {
   const renderTraditional = () => {
     return (
       <div className="space-y-3">
-        {activeQuestion.options?.map((option) => {
+        {activeQuestion.options?.map((option: any, index: number) => {
           const isSelected = answerState === option.id;
           const showCorrect = isSubmitted && option.id === activeQuestion.correctId;
           const showIncorrect = isSubmitted && isSelected && !isCorrect;
+          
+          const label = String.fromCharCode(65 + index);
 
           return (
             <button
@@ -333,23 +336,30 @@ export default function StudentTestSession() {
               disabled={isSubmitted}
               onClick={() => setAnswerState(option.id)}
               className={cn(
-                "group relative flex w-full items-center gap-4 rounded-2xl border p-5 text-left transition-all",
-                !isSubmitted && isSelected ? "border-primary bg-primary/5 ring-1 ring-primary/20" : "border-border bg-card hover:border-primary/40",
-                showCorrect && "border-success bg-success/10 ring-1 ring-success/20",
-                showIncorrect && "border-destructive bg-destructive/10 ring-1 ring-destructive/20"
+                "group relative flex w-full items-center justify-between gap-4 rounded-xl border p-4 text-left transition-all",
+                !isSubmitted && isSelected ? "border-teal-700 bg-teal-50/20 ring-1 ring-teal-700 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                showCorrect && "border-green-500 bg-green-50 ring-1 ring-green-500",
+                showIncorrect && "border-red-500 bg-red-50 ring-1 ring-red-500"
               )}
             >
-              <div className={cn(
-                "grid size-8 shrink-0 place-items-center rounded-full border text-sm font-bold transition-all",
-                !isSubmitted && isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground group-hover:border-primary/40",
-                showCorrect && "border-success bg-success text-success-foreground",
-                showIncorrect && "border-destructive bg-destructive text-destructive-foreground"
-              )}>
-                {showCorrect ? <CheckCircle2 className="size-4" /> : showIncorrect ? <XCircle className="size-4" /> : option.id}
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <div className={cn(
+                  "grid size-9 shrink-0 place-items-center rounded-full text-[15px] font-bold transition-all",
+                  !isSubmitted && isSelected ? "bg-teal-700 text-white" : "bg-slate-100 text-slate-700 group-hover:bg-slate-200",
+                  showCorrect && "bg-green-500 text-white",
+                  showIncorrect && "bg-red-500 text-white"
+                )}>
+                  {showCorrect ? <CheckCircle2 weight="fill" className="size-5" /> : showIncorrect ? <XCircle weight="fill" className="size-5" /> : label}
+                </div>
+                <div className={cn("text-base break-words min-w-0", (showCorrect || (isSelected && !isSubmitted)) ? "font-semibold text-slate-900" : "font-medium text-slate-800")}>
+                  {option.text}
+                </div>
               </div>
-              <div className={cn("flex-1 text-lg break-words min-w-0", (showCorrect || (isSelected && !isSubmitted)) ? "font-medium text-foreground" : "text-muted-foreground")}>
-                {option.text}
-              </div>
+              {!isSubmitted && isSelected && (
+                <div className="text-teal-700 pr-2 animate-in fade-in zoom-in duration-200">
+                  <CheckCircle2 weight="fill" className="size-6" />
+                </div>
+              )}
             </button>
           );
         })}
@@ -443,60 +453,87 @@ export default function StudentTestSession() {
                   let isAnsweredCorrectly = answers[blankId] === blank.correct;
                   let availableOptions = blank.options;
                   
-                  if (activeQuestion.options?.clozeDependentMode) {
-                    const blankKeys = Object.keys(activeQuestion.options?.blanks || {});
-                    const combos = activeQuestion.options?.clozeCombinations || [];
-                    const b1 = answers[blankKeys[0]];
-                    
-                    if (blankId === blankKeys[1]) {
-                      if (b1) {
-                        // Check if combos use new grouped format or old flat format
-                        const isNewFormat = combos.length > 0 && Array.isArray(combos[0].connectedOptions);
-                        
-                        let validBlank2Options: string[] = [];
-                        if (isNewFormat) {
-                          const group = combos.find((c: any) => c.blank1 === b1);
-                          validBlank2Options = group?.connectedOptions || [];
-                        } else {
-                          validBlank2Options = combos.filter((c: any) => c.blank1 === b1).map((c: any) => c.blank2);
-                        }
-                        
-                        availableOptions = blank.options.filter((opt: string) => validBlank2Options.includes(opt));
+                  if (activeQuestion.options?.clozeDependencies && activeQuestion.options.clozeDependencies.length > 0) {
+                    const deps = activeQuestion.options.clozeDependencies;
+                    const dep = deps.find((d: any) => String(d.targetBlankId) === String(blankId));
+                    if (dep) {
+                      const sourceVal = answers[dep.sourceBlankId];
+                      if (sourceVal && dep.mapping[sourceVal]) {
+                        availableOptions = blank.options.filter((opt: string) => dep.mapping[sourceVal].includes(opt));
                       } else {
                         availableOptions = [];
                       }
                     }
                   }
                   
+                  // Prevent repeating options: Filter out any options already selected in other blanks
+                  const otherSelectedValues = Object.entries(answers)
+                    .filter(([key, val]) => String(key) !== String(blankId) && val)
+                    .map(([_, val]) => val);
+                  
+                  availableOptions = availableOptions.filter((opt: string) => !otherSelectedValues.includes(opt));
+                  
                   return (
-                    <span key={i} className="inline-block px-1">
-                      <select
-                        disabled={isSubmitted || availableOptions.length === 0}
-                        value={answers[blankId] || ""}
-                        onChange={(e) => {
-                          const newAns = { ...answers, [blankId]: e.target.value };
-                          // If we just changed blank 1, clear blank 2 to force re-selection from the new filtered list
-                          if (activeQuestion.options?.clozeDependentMode && blankId === Object.keys(activeQuestion.options?.blanks || {})[0]) {
-                            const b2Key = Object.keys(activeQuestion.options?.blanks || {})[1];
-                            if (b2Key) newAns[b2Key] = "";
-                          }
-                          setAnswerState(newAns);
-                        }}
-                        className={cn(
-                          "h-8 cursor-pointer appearance-none rounded-lg border bg-card px-3 pr-7 text-sm font-medium outline-none transition-all",
-                          !isSubmitted && "border-border hover:border-primary focus:border-primary focus:ring-2 focus:ring-primary/20",
-                          isSubmitted && isAnsweredCorrectly && "border-success bg-success/10 text-success font-semibold",
-                          isSubmitted && !isAnsweredCorrectly && "border-destructive bg-destructive/10 text-destructive font-semibold",
-                          availableOptions.length === 0 && "opacity-50 cursor-not-allowed"
+                    <span key={i} className="inline-flex relative mx-1 my-0.5 align-middle">
+                      <div className="relative">
+                        {availableOptions.length === 0 && (
+                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
+                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                          </div>
                         )}
-                        style={{
-                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-                          backgroundRepeat: "no-repeat", backgroundPosition: "right 0.5rem center", backgroundSize: "1em",
-                        }}
-                      >
-                        <option value="" disabled>{availableOptions.length === 0 ? "Select previous blank first" : "Select..."}</option>
-                        {availableOptions.map((opt: string) => <option key={opt} value={opt}>{opt}</option>)}
-                      </select>
+                        <Select
+                          disabled={isSubmitted || availableOptions.length === 0}
+                          value={answers[blankId] || ""}
+                          onValueChange={(value) => {
+                            const newAns = { ...answers, [blankId]: value };
+                            if (activeQuestion.options?.clozeDependencies) {
+                              const deps = activeQuestion.options.clozeDependencies;
+                              
+                              // Recursively clear all targets that depend on this one, or targets of targets, etc.
+                              let currentSources = [blankId];
+                              let targetsToClear = new Set<string>();
+                              
+                              while (currentSources.length > 0) {
+                                const nextSources: string[] = [];
+                                for (const source of currentSources) {
+                                  const matchingDeps = deps.filter((d: any) => String(d.sourceBlankId) === String(source));
+                                  for (const d of matchingDeps) {
+                                    targetsToClear.add(String(d.targetBlankId));
+                                    nextSources.push(String(d.targetBlankId));
+                                  }
+                                }
+                                currentSources = nextSources;
+                              }
+                              
+                              for (const target of targetsToClear) {
+                                newAns[target] = "";
+                              }
+                            }
+                            setAnswerState(newAns);
+                          }}
+                        >
+                          <SelectTrigger
+                            className={cn(
+                              "h-10 cursor-pointer rounded-xl border px-4 text-[15px] font-medium outline-none transition-all min-w-[200px] shadow-none [&>span]:w-full [&>span]:text-left",
+                              availableOptions.length > 0 
+                                 ? (!isSubmitted && "border-slate-300 bg-white hover:border-teal-700 focus:border-teal-700 focus:ring-1 focus:ring-teal-700 text-slate-800 [&>svg]:text-teal-700 [&>svg]:opacity-100")
+                                 : "border-slate-200 bg-slate-100 text-slate-400 pl-11 [&>svg]:opacity-30",
+                              isSubmitted && isAnsweredCorrectly && "border-green-500 bg-green-50 text-green-700 font-semibold [&>svg]:text-green-700",
+                              isSubmitted && !isAnsweredCorrectly && "border-red-500 bg-red-50 text-red-700 font-semibold [&>svg]:text-red-700",
+                              availableOptions.length === 0 && "cursor-not-allowed"
+                            )}
+                          >
+                            <SelectValue placeholder={availableOptions.length === 0 ? "Select Blank 1 first" : "Select answer"} />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[300px]">
+                            {availableOptions.map((opt: string) => (
+                              <SelectItem key={opt} value={opt} className="text-[15px] cursor-pointer">
+                                {opt}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </span>
                   );
                 }
@@ -537,7 +574,7 @@ export default function StudentTestSession() {
     };
     
     return (
-      <div className="leading-loose text-lg text-foreground prose prose-sm max-w-none dark:prose-invert">
+      <div className="leading-[2.5rem] text-lg text-slate-800">
         {parseHtmlToReact(activeQuestion.text)}
       </div>
     );
@@ -686,31 +723,19 @@ export default function StudentTestSession() {
       if (!over || isSubmitted) return;
 
       const word = active.data.current?.word;
-      const sourceType = active.data.current?.typeId; // e.g. "bank-actions" or "actions-0"
-      const targetSlot = over.id; // e.g. "bank-actions" or "actions-1" or "condition"
+      const sourceType = active.data.current?.typeId;
+      const targetSlot = over.id;
 
       if (!word) return;
 
       const newState = { actions: [...(state.actions || [])], condition: state.condition, parameters: [...(state.parameters || [])] } as any;
 
-      // Remove from old slot if it was in one
       ["actions", "parameters"].forEach(key => {
         const idx = newState[key].indexOf(word);
         if (idx > -1) newState[key][idx] = null;
       });
-      if (newState.condition === word) newState.condition = null;
 
       if (targetSlot.startsWith("bank-")) {
-        setAnswerState(newState);
-        return;
-      }
-
-      if (targetSlot === "condition") {
-        if (sourceType !== "bank-conditions" && sourceType !== "condition") {
-          setAnswerState(newState);
-          return;
-        }
-        newState.condition = word;
         setAnswerState(newState);
         return;
       }
@@ -721,7 +746,6 @@ export default function StudentTestSession() {
         return;
       }
 
-      // Restrict dropping into wrong type
       if (sourceType !== "bank-options" && sourceType !== `bank-${targetType}` && !sourceType.startsWith(`${targetType}-`)) {
         setAnswerState(newState); 
         return;
@@ -739,7 +763,7 @@ export default function StudentTestSession() {
         data: { word, typeId },
         disabled: isSubmitted
       });
-      const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 10 } : undefined;
+      const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
       
       return (
         <button
@@ -748,43 +772,61 @@ export default function StudentTestSession() {
           {...listeners}
           {...attributes}
           className={cn(
-            "rounded-2xl border border-white/40 bg-white/90 backdrop-blur-sm px-5 py-2.5 text-sm font-semibold text-slate-800 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)] transition-all hover:shadow-[0_8px_16px_-4px_rgba(0,0,0,0.1),0_0_0_1px_rgba(0,0,0,0.02)] hover:-translate-y-0.5 max-w-full break-words text-wrap touch-none relative overflow-hidden group",
+            "relative flex items-stretch rounded-lg bg-white text-xs font-medium text-slate-700 shadow-[0_1px_4px_-1px_rgba(0,0,0,0.05)] border border-slate-200 touch-none group hover:shadow-sm hover:border-slate-300",
             !typeId.startsWith("bank-") && "w-full",
-            isDragging && "opacity-80 ring-4 ring-primary/20 scale-105 shadow-xl rotate-1",
-            isSubmitted && "opacity-60 cursor-default hover:transform-none hover:shadow-sm"
+            isDragging ? "opacity-95 ring-2 ring-blue-400/30 scale-105 shadow-md rotate-1 z-50 transition-none" : "transition-all duration-300 ease-out",
+            isSubmitted && "opacity-75 cursor-default hover:transform-none hover:shadow-sm hover:border-slate-200"
           )}
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-white/60 to-transparent pointer-events-none rounded-2xl"></div>
-          <span className="relative z-10 tracking-tight">{word}</span>
+          <div className="flex items-center justify-center px-1.5 py-2 border-r border-slate-100 text-slate-300 group-hover:text-slate-400">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm7-7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
+          </div>
+          <div className="px-3 py-2 text-center flex-1">
+            <span className="tracking-tight leading-tight">{word}</span>
+          </div>
         </button>
       );
     };
 
-    const DroppableSlot = ({ label, id, value, isExpected }: any) => {
+    const DroppableSlot = ({ label, id, value, isExpected, type }: any) => {
       const { isOver, setNodeRef } = useDroppable({ id });
       
-      let uiClass = "bg-slate-100/50 border border-slate-200 shadow-inner text-slate-400 hover:bg-slate-100";
+      const isCause = type === 'cause';
       
-      if (isOver) uiClass = "bg-primary/5 border border-primary/40 ring-4 ring-primary/10 text-primary font-semibold shadow-inner scale-[1.02]";
-      else if (value) uiClass = "border-transparent bg-transparent";
+      let uiClass = isCause 
+        ? "bg-white border-blue-400/70 border-dashed hover:bg-blue-50/50 text-blue-600"
+        : "bg-white border-teal-400/70 border-dashed hover:bg-teal-50/50 text-teal-600";
+      
+      if (isOver) {
+        uiClass = isCause 
+          ? "bg-blue-50 border-blue-400 text-blue-700 border-solid shadow-sm scale-[1.01]"
+          : "bg-teal-50 border-teal-400 text-teal-700 border-solid shadow-sm scale-[1.01]";
+      } else if (value) {
+        uiClass = "border-transparent bg-transparent p-0";
+      }
 
       if (isSubmitted && value) {
-        if (isExpected(value)) uiClass = "bg-success/10 border-success/30 text-success-foreground font-bold";
-        else uiClass = "bg-destructive/10 border-destructive/30 text-destructive-foreground font-bold";
+        if (isExpected(value)) uiClass = "bg-green-50 border-green-300 text-green-700 p-0 border-solid";
+        else uiClass = "bg-red-50 border-red-300 text-red-700 p-0 border-solid";
       } else if (isSubmitted && !value) {
-        uiClass = "bg-destructive/5 text-destructive border border-dashed border-destructive/50";
+        uiClass = "bg-red-50 text-red-500 border-dashed border-red-300";
       }
 
       return (
         <div 
           ref={setNodeRef}
-          className={cn("flex min-h-[3.25rem] h-auto w-full flex-col items-center justify-center rounded-xl px-2 py-1.5 transition-all duration-300 ease-out cursor-pointer relative", uiClass)}
+          className={cn("flex min-h-[5.5rem] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 transition-colors duration-200 cursor-pointer relative", uiClass)}
         >
           {value ? (
-            <div className="flex w-full h-full items-center justify-center font-semibold animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex w-full h-full items-center justify-center animate-in zoom-in-95 duration-200">
                <DraggableWord word={value} typeId={id} />
             </div>
-          ) : <span className="text-xs uppercase tracking-[0.15em] font-medium text-center px-4">{label}</span>}
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-2">
+              <div className={cn("w-8 h-8 rounded-full border-[1.5px] border-dashed flex items-center justify-center", isCause ? "border-blue-400/70" : "border-teal-400/70")}></div>
+              <span className="text-xs font-semibold uppercase tracking-wider text-center">{label}</span>
+            </div>
+          )}
         </div>
       );
     };
@@ -795,9 +837,9 @@ export default function StudentTestSession() {
         <div 
           ref={setNodeRef} 
           className={cn(
-            "flex min-h-[80px] rounded-[1.5rem] border border-white p-4 transition-all duration-300 bg-slate-50/80 backdrop-blur-xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]", 
-            isOver ? "bg-white border-primary/30 ring-4 ring-primary/5 scale-[1.01]" : "", 
-            className || "flex-col gap-2"
+            "flex min-h-[100px] transition-all duration-300", 
+            isOver && "bg-slate-50/50 rounded-br-2xl", 
+            className
           )}
         >
           {children}
@@ -807,70 +849,100 @@ export default function StudentTestSession() {
 
     return (
       <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-        <div className="space-y-4 select-none relative z-0">
-          <div className="flex flex-col md:flex-row items-stretch justify-center gap-2 rounded-[2rem] border-0 bg-slate-50/40 p-2 md:p-4 shadow-[inset_0_2px_20px_rgba(0,0,0,0.02)] overflow-x-auto relative min-h-[160px]">
-            
-            {/* Background connection lines using SVG for Bow-Tie shape */}
-            <div className="absolute inset-0 top-10 z-0 hidden md:block pointer-events-none opacity-40">
-               <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                 {correctActions.map((_, i) => {
-                    const total = correctActions.length;
-                    const spread = Math.min(60, total * 20);
-                    const startY = 50 - spread/2;
-                    const y = total === 1 ? 50 : startY + (spread * i / (total - 1));
-                    return <path key={`left-${i}`} d={`M 31 ${y} C 36 ${y}, 36 50, 45 50`} fill="none" stroke="currentColor" strokeWidth="0.8" className="text-primary/70" strokeLinecap="round" strokeDasharray="3 3" />;
-                 })}
-                 {correctParameters.map((_, i) => {
-                    const total = correctParameters.length;
-                    const spread = Math.min(60, total * 20);
-                    const startY = 50 - spread/2;
-                    const y = total === 1 ? 50 : startY + (spread * i / (total - 1));
-                    return <path key={`right-${i}`} d={`M 55 50 C 64 50, 64 ${y}, 69 ${y}`} fill="none" stroke="currentColor" strokeWidth="0.8" className="text-primary/70" strokeLinecap="round" strokeDasharray="3 3" />;
+        <div className="w-full rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden select-none relative z-0 mt-6 max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row items-stretch justify-center p-8 gap-4 w-full">
+             
+             {/* Actions Left */}
+             <div className="flex-[1.2] flex flex-col">
+               <div className="flex items-center gap-4 h-10 mb-6 shrink-0">
+                 <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                 </div>
+                 <span className="text-sm font-bold text-slate-800 uppercase tracking-widest">Causes & Assessments</span>
+               </div>
+               <div className="flex-1 flex flex-col gap-6 justify-around relative">
+                 {correctActions.map((_, i: number) => (
+                   <DroppableSlot key={i} label={`Cause ${i+1}`} id={`actions-${i}`} type="cause" value={state.actions?.[i]} isExpected={(v: string) => correctActions.some((c: any) => c.text === v)} />
+                 ))}
+               </div>
+             </div>
+
+             {/* Connection Left -> Center */}
+             <div className="hidden md:flex w-24 flex-col">
+               <div className="h-10 mb-6 shrink-0"></div>
+               <div className="relative flex-1">
+                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                 {correctActions.map((_: any, i: number) => {
+                   const y = ((2 * i + 1) / (2 * correctActions.length)) * 100;
+                   return <path key={i} d={`M 0 ${y} C 50 ${y}, 50 50, 100 50`} fill="none" stroke="#cbd5e1" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />;
                  })}
                </svg>
-            </div>
+               <div className="absolute right-[-4px] top-1/2 -translate-y-1/2 text-slate-300">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+               </div>
+               </div>
+             </div>
 
-            {/* Actions Left */}
-            <div className="relative z-10 w-full min-w-[220px] flex-1 space-y-2.5 px-2 py-2 flex flex-col justify-center">
-              <h3 className="mb-4 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Causes/Assessments</h3>
-              {correctActions.map((_, i: number) => (
-                <DroppableSlot key={i} label={`Cause/Assessment ${i+1}`} id={`actions-${i}`} value={state.actions?.[i]} isExpected={(v: string) => correctActions.some((c: any) => c.text === v)} />
-              ))}
-            </div>
+             {/* Center */}
+             <div className="flex-[1.4] flex flex-col px-2">
+               <div className="flex items-center justify-center h-10 mb-6 shrink-0">
+                 <span className="text-[13px] font-bold text-teal-700 uppercase tracking-widest">Core Condition</span>
+               </div>
+               <div className="flex-1 flex flex-col items-center justify-center relative">
+                 <div className="w-full flex flex-col items-center justify-center bg-white rounded-xl border border-teal-500/70 shadow-sm px-6 py-10 min-h-[11rem]">
+                    <span className="text-xl font-bold text-teal-800 text-center break-words">{correctConditions[0]?.text || "Unknown Condition"}</span>
+                 </div>
+               </div>
+             </div>
 
-            {/* Condition Center */}
-            <div className="relative z-10 w-full min-w-[240px] flex-1 px-2 py-4 flex flex-col items-center justify-center">
-              <h3 className="mb-4 text-center text-[13px] font-extrabold uppercase tracking-[0.25em] text-primary">Core Condition</h3>
-              <div className="w-full max-w-[320px]">
-                <div className="flex min-h-[4.5rem] h-auto w-full flex-col items-center justify-center rounded-[1.5rem] px-3 py-2 transition-all bg-gradient-to-br from-primary to-primary/80 shadow-[0_8px_24px_-4px_rgba(0,0,0,0.15)] border border-primary/20 relative group">
-                  <div className="absolute inset-0 bg-white/10 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="flex items-center justify-center font-bold text-center w-full z-10">
-                     <div className="rounded-[1.25rem] border border-white/40 bg-white/95 backdrop-blur-md px-6 py-3.5 text-[15px] font-bold text-slate-800 shadow-sm w-full break-words text-wrap relative overflow-hidden">
-                       <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/50 to-white opacity-60"></div>
-                       <span className="relative z-10 tracking-tight">{correctConditions[0]?.text || "Unknown Condition"}</span>
-                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+             {/* Connection Center -> Right */}
+             <div className="hidden md:flex w-24 flex-col">
+               <div className="h-10 mb-6 shrink-0"></div>
+               <div className="relative flex-1">
+                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                 {correctParameters.map((_: any, i: number) => {
+                   const y = ((2 * i + 1) / (2 * correctParameters.length)) * 100;
+                   return <path key={i} d={`M 0 50 C 50 50, 50 ${y}, 100 ${y}`} fill="none" stroke="#cbd5e1" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />;
+                 })}
+               </svg>
+               {correctParameters.map((_: any, i: number) => {
+                 const y = ((2 * i + 1) / (2 * correctParameters.length)) * 100;
+                 return (
+                   <div key={i} className="absolute right-[-4px] -translate-y-1/2 text-slate-300" style={{ top: `${y}%` }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                   </div>
+                 );
+               })}
+               </div>
+             </div>
 
-            {/* Parameters Right */}
-            <div className="relative z-10 w-full min-w-[220px] flex-1 space-y-2.5 px-2 py-2 flex flex-col justify-center">
-              <h3 className="mb-4 text-center text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Treatments/Effects</h3>
-              {correctParameters.map((_, i: number) => (
-                <DroppableSlot key={i} label={`Treatment/Effect ${i+1}`} id={`parameters-${i}`} value={state.parameters?.[i]} isExpected={(v: string) => correctParameters.some((c: any) => c.text === v)} />
-              ))}
-            </div>
+             {/* Parameters Right */}
+             <div className="flex-[1.2] flex flex-col">
+               <div className="flex items-center justify-end gap-4 h-10 mb-6 shrink-0">
+                 <span className="text-sm font-bold text-slate-800 uppercase tracking-widest text-right">Treatments & Effects</span>
+                 <div className="w-10 h-10 rounded-full bg-teal-50 text-teal-600 flex items-center justify-center shrink-0">
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                 </div>
+               </div>
+               <div className="flex-1 flex flex-col gap-6 justify-around relative">
+                 {correctParameters.map((_, i: number) => (
+                   <DroppableSlot key={i} label={`Treatment ${i+1}`} id={`parameters-${i}`} type="treatment" value={state.parameters?.[i]} isExpected={(v: string) => correctParameters.some((c: any) => c.text === v)} />
+                 ))}
+               </div>
+             </div>
           </div>
-
-          {/* Options Columns */}
-          <div className="pt-4 w-full relative z-10">
-            <div className="space-y-4 max-w-5xl mx-auto">
-              <div className="flex items-center justify-center">
-                <h3 className="rounded-full bg-slate-800 px-4 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white shadow-lg">Word Bank</h3>
-              </div>
-              <DroppableWordBank id="bank-options" className="flex-row flex-wrap justify-center gap-4 items-center">
-                {(() => {
+          
+          <div className="border-t border-slate-200 flex flex-col bg-slate-50/30">
+            <div className="flex items-center px-6 py-4 border-b border-slate-200 bg-white shrink-0">
+               <div className="flex items-center gap-3">
+                 <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM9 9H5V5h4v4zm11-6h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm-1 6h-4V5h4v4zm-9 4H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm-1 6H5v-4h4v4zm11-6h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm-1 6h-4v-4h4v4z"/></svg>
+                 </div>
+                 <span className="text-xs font-bold text-slate-800 uppercase tracking-widest whitespace-nowrap">Word Bank</span>
+               </div>
+            </div>
+            <DroppableWordBank id="bank-options" className="flex flex-row flex-wrap items-center gap-3 p-6 flex-1 min-h-[100px]">
+              {(() => {
                   const allOptions = [
                     ...(config.actions || []),
                     ...(config.parameters || [])
@@ -878,13 +950,11 @@ export default function StudentTestSession() {
 
                   return allOptions.map((item: any, idx: number) => {
                     const isUsed = state.actions?.includes(item.text) || state.parameters?.includes(item.text);
-                    // Use a fallback div to preserve space so the layout doesn't jump
-                    if (isUsed) return <div key={`${item.text}-${idx}`} className="h-[38px] w-auto px-4 py-2 opacity-0 pointer-events-none">{item.text}</div>;
+                    if (isUsed) return <div key={`${item.text}-${idx}`} className="h-[34px] w-[1px] opacity-0 pointer-events-none m-0 p-0 overflow-hidden"></div>;
                     return <DraggableWord key={`${item.text}-${idx}`} word={item.text} typeId="bank-options" />;
                   });
-                })()}
-              </DroppableWordBank>
-            </div>
+              })()}
+            </DroppableWordBank>
           </div>
         </div>
       </DndContext>
@@ -897,9 +967,25 @@ export default function StudentTestSession() {
       case "mcq-single":
         return renderTraditional();
       case "next-gen-cloze": return (
-        <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <h2 className="mb-6 text-sm font-bold uppercase tracking-widest text-muted-foreground">Case Study</h2>
-          {renderCloze()}
+        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)]">
+          <div className="flex items-center gap-4 px-6 py-5 border-b border-slate-100">
+             <div className="w-10 h-10 rounded-lg bg-slate-100/80 text-slate-600 flex items-center justify-center shrink-0">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+             </div>
+             <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-800">Case Study</h2>
+          </div>
+          <div className="p-8 pb-10">
+            {renderCloze()}
+            
+            {activeQuestion.options?.clozeDependentMode && (
+              <div className="mt-10 flex items-center gap-3 rounded-lg border border-teal-100 bg-teal-50/50 p-4 text-teal-800">
+                <div className="text-teal-700">
+                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                </div>
+                <span className="text-[13px] font-medium">Blank 2 options depend on your first selection.</span>
+              </div>
+            )}
+          </div>
         </div>
       );
       case "next-gen-matrix": return renderMatrix();
@@ -920,47 +1006,46 @@ export default function StudentTestSession() {
 
   return (
     <StudentLayout title="Test Session">
-      <div className="flex h-full flex-col bg-background rounded-[1.5rem] overflow-hidden">
+      <div className="flex h-full flex-col bg-slate-50 overflow-hidden font-sans rounded-[1.5rem] md:rounded-none">
         
-        {/* Distraction-Free Header */}
-        <header className="sticky top-0 z-20 flex flex-col gap-2 border-b border-border bg-background/95 px-6 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/60 md:flex-row md:items-center md:justify-between transform-gpu">
-          <div className="flex items-center gap-3">
+        {/* Top Header */}
+        <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shrink-0 z-20">
+          <div className="flex items-center gap-4">
             <button 
               onClick={() => navigate("/student/create-test")}
-              className="grid size-7 place-items-center rounded-full bg-muted text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive"
+              className="grid size-9 place-items-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
             >
-              <X className="size-3.5" weight="regular" />
+              <X className="size-4" weight="bold" />
             </button>
-            <div className="h-4 w-px bg-border" />
-            <div className="text-sm font-semibold text-muted-foreground">
+            <div className="text-[15px] font-semibold text-slate-900 hidden md:block">
               Question {currentIndex + 1} of {activePool.length}
-              <span className="ml-3 rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
-                {activeQuestion.type.replace("-", " ").toUpperCase()}
-              </span>
             </div>
+            <span className="rounded-full bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-700 md:ml-2">
+              {activeQuestion.type === "next-gen-cloze" ? "fill in the blanks drop down" : activeQuestion.type.replace(/-/g, " ")}
+            </span>
           </div>
           
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-4 md:gap-8">
             {timeRemaining !== null && config.mode !== 'review' && (
-              <div className={cn("flex items-center gap-2 rounded-full px-3 py-1 font-mono text-sm font-semibold", timeRemaining === 0 ? "bg-destructive text-destructive-foreground animate-bounce" : timeRemaining < 60 ? "bg-destructive/10 text-destructive animate-pulse" : "bg-muted text-foreground")}>
-                <Clock className="size-4" />
+              <div className={cn("hidden md:flex items-center gap-2 text-[15px] font-semibold", timeRemaining === 0 ? "text-red-500 animate-bounce" : timeRemaining < 60 ? "text-red-500 animate-pulse" : "text-slate-800")}>
+                <Clock className="size-5" weight="regular" />
                 {timeRemaining === 0 ? "Time's Up!" : formatTime(timeRemaining)}
               </div>
             )}
             
-            <div className="flex items-center gap-3">
-              <div className="h-2 w-32 overflow-hidden rounded-full bg-muted">
+            <div className="hidden md:flex items-center gap-3">
+              <div className="h-2 w-32 overflow-hidden rounded-full bg-slate-200">
                 <div 
-                  className="h-full bg-primary transition-all duration-500" 
+                  className="h-full bg-teal-700 transition-all duration-500" 
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <div className="text-xs font-semibold text-primary">{progressPercent}%</div>
+              <div className="text-xs font-bold text-slate-800">{progressPercent}%</div>
             </div>
             
             <button 
               onClick={() => config.mode === 'review' ? navigate('/student/test-history') : handleEndSession()}
-              className="text-sm font-semibold text-muted-foreground hover:text-foreground"
+              className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
             >
               {config.mode === 'review' ? "Exit Review" : "End Session"}
             </button>
@@ -968,125 +1053,148 @@ export default function StudentTestSession() {
         </header>
 
         {/* Question Area */}
-        <main className="flex-1 overflow-y-auto px-4 py-4 pb-4">
-          <div className="mx-auto max-w-5xl">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center items-start">
+          <div className={cn("w-full h-fit transition-all duration-300", activeQuestion.type === "bowtie" ? "max-w-6xl" : "max-w-4xl")}>
             
             {timeRemaining === 0 ? (
-              <div className="flex min-h-[400px] flex-col items-center justify-center space-y-6 rounded-2xl border border-destructive/20 bg-destructive/5 p-12 text-center animate-in fade-in zoom-in duration-500">
-                <div className="grid size-20 place-items-center rounded-full bg-destructive/20 text-destructive">
-                  <Clock className="size-10" />
+              <div className="flex flex-col items-center justify-center space-y-6 rounded-2xl border border-red-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
+                <div className="grid size-20 place-items-center rounded-full bg-red-50 text-red-500">
+                  <Clock className="size-10" weight="fill" />
                 </div>
                 <div className="space-y-2">
-                  <h2 className="text-3xl font-bold tracking-tight text-destructive">Time's Up!</h2>
-                  <p className="text-lg text-muted-foreground">Your test session has ended because the time ran out.</p>
-                  <p className="text-sm text-muted-foreground mt-2">All your previously submitted answers have been saved.</p>
+                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">Time's Up!</h2>
+                  <p className="text-lg text-slate-500">Your test session has ended because the time ran out.</p>
+                  <p className="text-sm text-slate-400 mt-2">All your previously submitted answers have been saved.</p>
                 </div>
                 <motion.button
                   whileTap={{ scale: 0.95 }}
                   onClick={handleEndSession}
-                  className="mt-8 rounded-full bg-primary px-8 py-4 text-lg font-bold text-primary-foreground shadow-lg shadow-primary/25 transition hover:bg-primary/90"
+                  className="mt-8 rounded-lg bg-teal-700 px-8 py-3.5 text-[15px] font-semibold text-white shadow-sm transition hover:bg-teal-800"
                 >
                   End Session & View Results
                 </motion.button>
               </div>
             ) : (
-              <>
-                <div className="mb-2 flex gap-2">
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{activeQuestion.category}</span>
-                  <span className="rounded-md bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">{activeQuestion.subcategory}</span>
-                </div>
-
-                {!isSubmitted ? (
-                  <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                    <div 
-                      className="mb-3 text-sm font-medium leading-relaxed text-foreground"
-                      dangerouslySetInnerHTML={{ __html: activeQuestion.type === "next-gen-cloze" ? activeQuestion.text.replace(/{[0-9]+}/g, "_________") : activeQuestion.text }}
-                    />
-                    {renderContent()}
+              <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] border border-slate-200 overflow-hidden flex flex-col">
+                <div className="p-6 md:p-10">
+                  <div className="mb-8 flex gap-2">
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">{activeQuestion.category}</span>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-semibold text-slate-600">{activeQuestion.subcategory}</span>
                   </div>
-                ) : (
-                  <div className="animate-in fade-in slide-in-from-bottom-4 space-y-8 duration-500">
-                    <div className={cn(
-                      "overflow-hidden rounded-2xl border bg-card shadow-sm",
-                      isCorrect ? "border-t-4 border-t-success" : "border-t-4 border-t-destructive"
-                    )}>
 
-                      <div className="p-5">
-                        <h3 className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Question Review</h3>
-                        <div 
-                          className="mb-4 text-base font-medium leading-relaxed text-foreground"
-                          dangerouslySetInnerHTML={{ __html: activeQuestion.type === "next-gen-cloze" ? activeQuestion.text.replace(/{[0-9]+}/g, "_________") : activeQuestion.text }}
-                        />
+                  {!isSubmitted ? (
+                    <div className="animate-in fade-in duration-500">
+                      <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question {(currentIndex + 1).toString().padStart(2, '0')}</div>
+                      
+                      {activeQuestion.type === "next-gen-cloze" ? (
+                        <>
+                          <div className="mb-2 text-[22px] font-bold leading-snug text-slate-900">Complete the statement</div>
+                          <div className="mb-8 text-[15px] text-slate-500">Choose an answer for Blank 1 to unlock Blank 2.</div>
+                        </>
+                      ) : (
+                        <>
+                          <div 
+                            className="mb-3 text-[22px] font-bold leading-snug text-slate-900"
+                            dangerouslySetInnerHTML={{ __html: activeQuestion.text }}
+                          />
+                          {(activeQuestion.type.startsWith('mcq') || activeQuestion.type === 'next-gen-sata') && (
+                            <div className="mb-8 text-[15px] text-slate-500">Select {activeQuestion.type === 'mcq-multi' || activeQuestion.type === 'next-gen-sata' ? 'all that apply' : 'one answer'}</div>
+                          )}
+                        </>
+                      )}
+                      
+                      <div className={cn(activeQuestion.type === 'bowtie' && "pt-2")}>
+                        {renderContent()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="animate-in fade-in duration-500">
+                      <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question Review</div>
+                      <div 
+                        className="mb-8 text-[22px] font-bold leading-snug text-slate-900"
+                        dangerouslySetInnerHTML={{ __html: activeQuestion.type === "next-gen-cloze" ? activeQuestion.text.replace(/{[0-9]+}/g, "_________") : activeQuestion.text }}
+                      />
+                      
+                      <div className={cn("grid grid-cols-1 gap-10", activeQuestion.type === "bowtie" ? "" : "lg:grid-cols-[1fr_360px]")}>
+                        <div className="min-w-0">
+                          {renderContent()}
+                        </div>
                         
-                        <div className={cn("grid grid-cols-1 gap-6 items-start", activeQuestion.type.startsWith("mcq") && "lg:grid-cols-2")}>
-                          {/* Graded UI */}
-                          <div className={cn("opacity-95", !activeQuestion.type.startsWith("mcq") && "w-full overflow-x-auto")}>
-                            {renderContent()}
-                          </div>
-                          
-                          <div className="rounded-xl border border-border bg-card p-4 shadow-sm overflow-hidden">
-                            <h3 className="mb-2 flex items-center gap-2 text-base font-bold text-foreground">
-                              <BookOpen className="size-4 text-primary" />
-                              Detailed Explanation
-                            </h3>
-                            <div 
-                              className="text-sm leading-relaxed text-muted-foreground break-words"
-                              dangerouslySetInnerHTML={{ __html: activeQuestion.rationale }}
-                            />
-                          </div>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 h-fit">
+                          <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-slate-900">
+                            <BookOpen weight="fill" className="size-5 text-teal-700" />
+                            Detailed Explanation
+                          </h3>
+                          <div 
+                            className="text-[13px] leading-relaxed text-slate-600 break-words prose prose-sm prose-slate"
+                            dangerouslySetInnerHTML={{ __html: activeQuestion.rationale || "No explanation provided for this question." }}
+                          />
                         </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Footer Actions (moved inside main scroll area) */}
-            {timeRemaining !== 0 && (
-              <footer className="w-full mt-8 pb-6 px-2">
-                <div className="flex items-center justify-end">
-                  
-                  {config.mode === 'review' ? (
-                    <div className="flex items-center gap-4">
-                      {currentIndex < activePool.length - 1 && (
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={handleNext}
-                          className="flex items-center gap-2 rounded-full bg-foreground px-8 py-3 text-sm font-bold text-background shadow-lg transition"
-                        >
-                          Next Question <ChevronRight className="size-4" />
-                        </motion.button>
-                      )}
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={() => navigate('/student/test-history')}
-                        className="rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition"
-                      >
-                        Exit Review
-                      </motion.button>
-                    </div>
-                  ) : !isSubmitted ? (
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      disabled={!canSubmit || timeRemaining === 0}
-                      onClick={handleSubmitAnswer}
-                      className="rounded-full bg-primary px-8 py-3 text-sm font-bold text-primary-foreground shadow-lg shadow-primary/25 transition disabled:opacity-50"
-                    >
-                      Submit Answer
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      whileTap={{ scale: 0.95 }}
-                      onClick={handleNext}
-                      className="flex items-center gap-2 rounded-full bg-foreground px-8 py-3 text-sm font-bold text-background shadow-lg transition"
-                    >
-                      {currentIndex < activePool.length - 1 ? "Next Question" : "End Session"}
-                      {currentIndex < activePool.length - 1 && <ChevronRight className="size-4" />}
-                    </motion.button>
                   )}
                 </div>
-              </footer>
+
+                {/* Card Footer Actions */}
+                <div className="border-t border-slate-100 bg-white px-6 md:px-8 py-5 flex items-center justify-between">
+                  <div className="flex-1">
+                  </div>
+                  
+                  <div className="flex-1 flex flex-col items-center justify-center hidden md:flex">
+                    {!isSubmitted && (
+                      activeQuestion.type === 'next-gen-cloze' ? (
+                        <div className="flex items-center gap-4">
+                           <span className="text-[13px] font-medium text-slate-600">
+                             {Object.values(answerState || {}).filter(Boolean).length} of {Object.keys(activeQuestion.options?.blanks || {}).length} blanks completed
+                           </span>
+                           <div className="h-1.5 w-24 rounded-full bg-slate-200 overflow-hidden">
+                              <div className="h-full bg-slate-400 transition-all" style={{ width: `${(Object.values(answerState || {}).filter(Boolean).length / Object.keys(activeQuestion.options?.blanks || {}).length) * 100}%` }}></div>
+                           </div>
+                        </div>
+                      ) : (
+                        <span className="text-[13px] text-slate-400">You can change your answer before submitting.</span>
+                      )
+                    )}
+                  </div>
+                  
+                  <div className="flex-1 flex justify-end">
+                    {config.mode === 'review' ? (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => navigate('/student/test-history')}
+                          className="rounded-lg border border-slate-200 px-6 py-2.5 text-[15px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                        >
+                          Exit Review
+                        </button>
+                        {currentIndex < activePool.length - 1 && (
+                          <button
+                            onClick={handleNext}
+                            className="flex items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-[15px] font-semibold text-white transition hover:bg-teal-800"
+                          >
+                            Next <ChevronRight weight="bold" className="size-4" />
+                          </button>
+                        )}
+                      </div>
+                    ) : !isSubmitted ? (
+                      <button
+                        disabled={!canSubmit || timeRemaining === 0}
+                        onClick={handleSubmitAnswer}
+                        className="flex items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-[15px] font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Submit answer <ChevronRight weight="bold" className="size-4" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleNext}
+                        className="flex items-center gap-2 rounded-lg bg-slate-900 px-6 py-2.5 text-[15px] font-semibold text-white transition hover:bg-slate-800"
+                      >
+                        {currentIndex < activePool.length - 1 ? "Next Question" : "Finish Test"}
+                        {currentIndex < activePool.length - 1 && <ChevronRight weight="bold" className="size-4" />}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
 
           </div>

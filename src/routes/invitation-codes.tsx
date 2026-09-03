@@ -1,5 +1,6 @@
 ;
 import { AdminLayout } from "@/components/layout/AdminLayout";
+import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination";
 import { Copy, Plus, Ticket, Trash as Trash2 } from "@phosphor-icons/react";
 import {
   AlertDialog,
@@ -25,6 +26,9 @@ function CodesPage() {
   const [generated, setGenerated] = useState<string[]>([]);
   const [invitationCodes, setInvitationCodes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 10;
+  const totalPages = Math.ceil(invitationCodes.length / pageSize);
 
   async function load() {
     const { data } = await supabase.from('invitation_codes').select('*').order('created_date', { ascending: false });
@@ -162,9 +166,9 @@ function CodesPage() {
                 <tr><th className="p-3 pl-4">Code</th><th className="p-3">Student</th><th className="p-3">Email</th><th className="p-3">Status</th><th className="p-3">Created</th><th className="p-3">Expires</th><th className="p-3 pr-4 text-right">Actions</th></tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {invitationCodes.map((c) => (
+                {invitationCodes.slice((currentPage - 1) * pageSize, currentPage * pageSize).map((c) => (
                   <tr key={c.code} className="bg-card">
-                    <td className="p-3 pl-4"><code className="rounded-md bg-muted px-2 py-1 text-xs">{c.code.startsWith('Direct-') ? 'Direct' : c.code}</code></td>
+                    <td className="p-3 pl-4 whitespace-nowrap"><code className="rounded-md bg-muted px-2 py-1 text-xs font-mono">{c.code.startsWith('Direct-') ? 'Direct' : c.code}</code></td>
                     <td className="p-3 font-medium">
                       {c.student_name === "—" ? "—" : c.student_name.split(" | ")[0]}
                     </td>
@@ -178,8 +182,8 @@ function CodesPage() {
                         c.status === "Expired" && "bg-destructive/10 text-destructive",
                       )}>{c.status}</span>
                     </td>
-                    <td className="p-3 text-muted-foreground">{c.created_date.split(',')[0]}</td>
-                    <td className="p-3 text-muted-foreground">{c.expires_date.split(',')[0]}</td>
+                    <td className="p-3 text-muted-foreground whitespace-nowrap">{c.created_date.split(',')[0]}</td>
+                    <td className="p-3 text-muted-foreground whitespace-nowrap">{c.expires_date.split(',')[0]}</td>
                     <td className="p-3 pr-4">
                       <div className="flex justify-end gap-1.5">
                         <button onClick={() => { navigator.clipboard.writeText(c.code); toast.success("Code copied to clipboard!"); }} className="grid size-8 place-items-center rounded-lg border border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"><Copy className="size-4" /></button>
@@ -207,6 +211,37 @@ function CodesPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="mt-4">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))} 
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <PaginationItem key={i}>
+                      <PaginationLink 
+                        onClick={() => setCurrentPage(i + 1)}
+                        isActive={currentPage === i + 1}
+                        className="cursor-pointer"
+                      >
+                        {i + 1}
+                      </PaginationLink>
+                    </PaginationItem>
+                  ))}
+                  <PaginationItem>
+                    <PaginationNext 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} 
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </div>
       </div>
     </AdminLayout>
