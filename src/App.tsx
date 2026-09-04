@@ -6,6 +6,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { NotificationProvider } from "./contexts/NotificationContext";
 import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
+import { cn } from "@/lib/utils";
 import Login from "./routes/login";
 
 // Import all routes manually
@@ -75,7 +76,7 @@ function StudentApp() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -15 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="px-6 py-6"
+          className={cn("h-full", !location.pathname.includes("/test-session") && "px-6 py-6")}
         >
           <Routes location={location}>
             <Route path="/" element={<StudentDashboard />} />

@@ -174,15 +174,15 @@ export function RichTextEditor({ value, onChange, placeholder, className, allowC
               type="button"
               onClick={() => {
                 const text = editor.getText();
-                const matches = [...text.matchAll(/{(\d+)}/g)];
+                const matches = [...text.matchAll(/{(?:dropdown\s+)?(\d+)}/g)];
                 const ids = matches.map(m => parseInt(m[1], 10)).filter(n => !isNaN(n));
                 const nextId = String(Math.max(0, ...ids) + 1);
-                editor.chain().focus().insertContent(`{${nextId}} `).run();
+                editor.chain().focus().insertContent(`{dropdown ${nextId}} `).run();
                 if (onInsertBlank) onInsertBlank(nextId);
               }}
               className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-primary bg-primary/10 hover:bg-primary/20 transition-colors"
             >
-              Insert Blank {'{ }'}
+              Insert Blank {'{dropdown }'}
             </button>
           </div>
         )}

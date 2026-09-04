@@ -448,7 +448,7 @@ function PreviousQuestions() {
                   </div>
                 ) : previewQuestion.type === "next-gen-cloze" && (
                   <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
-                    <div className="font-semibold text-primary mb-3">Fill in the Blanks</div>
+                    <div className="font-semibold text-primary mb-3">Fill in the Blank</div>
                     <div className="space-y-2">
                       {Object.entries(previewQuestion.options?.blanks || {}).map(([key, blank]: [string, any]) => (
                         <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-background border">

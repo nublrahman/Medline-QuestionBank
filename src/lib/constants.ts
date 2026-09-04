@@ -5,7 +5,7 @@ export const questionTypes = {
   ],
   ngn: [
     { id: "bowtie", name: "Bow-Tie", desc: "Cause & effect diagram." },
-    { id: "next-gen-cloze", name: "Fill in the Blank Dropdown", desc: "Cascading dropdowns." },
+    { id: "next-gen-cloze", name: "Fill in the Blank", desc: "Cascading dropdowns." },
     { id: "table", name: "Table-Type Question", desc: "Row/column selections." },
     { id: "highlight", name: "Click to Highlight", desc: "Highlight key text." },
     { id: "dnd-order", name: "Drag & Drop Ordering", desc: "Arrange in order." },

@@ -250,26 +250,30 @@ function CreateQuestion() {
         return;
       }
     } else if (type === "next-gen-cloze") {
-      const match = stem.match(/{([0-9]+)}/g);
+      const match = stem.match(/{(?:dropdown\s+)?[0-9]+}/g);
       if (!match) {
-        toast.error("You must have at least one blank placeholder (e.g. {1}) in the stem.");
+        toast.error("You must have at least one blank placeholder (e.g. {dropdown 1}) in the stem.");
         return;
       }
       
-      const blankIds = match.map(m => m.replace(/[{}]/g, ''));
+      const blankIds = match.map(m => m.replace(/[^0-9]/g, ''));
       for (const id of blankIds) {
         const blank = clozeBlanks[id];
-        if (!blank || blank.options.some(o => !o.trim())) {
-          toast.error(`Blank {${id}} has empty options.`);
+        if (!blank) {
+          toast.error(`Dropdown {${id}} is in the text but missing from configuration.`);
+          return;
+        }
+        if (blank.options.some(o => !o.trim())) {
+          toast.error(`Dropdown {${id}} has empty options.`);
           return;
         }
         const texts = blank.options.map(o => o.trim().toLowerCase());
         if (new Set(texts).size !== texts.length) {
-          toast.error(`Blank {${id}} contains duplicate options.`);
+          toast.error(`Dropdown {${id}} contains duplicate options.`);
           return;
         }
         if (!blank.correct) {
-          toast.error(`Please select a correct answer for blank {${id}}.`);
+          toast.error(`Please select a correct answer for dropdown {${id}}.`);
           return;
         }
       }
@@ -280,11 +284,11 @@ function CreateQuestion() {
             return;
           }
           if (dep.sourceBlankId === dep.targetBlankId) {
-            toast.error(`Blank {${dep.sourceBlankId}} cannot depend on itself.`);
+            toast.error(`Dropdown {${dep.sourceBlankId}} cannot depend on itself.`);
             return;
           }
           if (Object.keys(dep.mapping).length === 0) {
-            toast.error(`Please map at least one option for the dependency between Blank {${dep.sourceBlankId}} and Blank {${dep.targetBlankId}}.`);
+            toast.error(`Please map at least one option for the dependency between Dropdown {${dep.sourceBlankId}} and Dropdown {${dep.targetBlankId}}.`);
             return;
           }
         }
@@ -487,7 +491,32 @@ function CreateQuestion() {
               <Section title="Question Stem">
                 <RichTextEditor
                   value={stem}
-                  onChange={setStem}
+                  onChange={(val) => {
+                    setStem(val);
+                    if (type === "next-gen-cloze") {
+                      // Strip HTML tags and normalize &nbsp; to space for accurate regex matching
+                      const textContent = val.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+                      const matches = Array.from(textContent.matchAll(/{(?:dropdown\s+)?([0-9]+)}/g));
+                      const idsInText = new Set(matches.map(m => m[1]));
+                      
+                      setClozeBlanks(prev => {
+                        const newBlanks = { ...prev };
+                        let hasChanges = false;
+                        for (const id of Object.keys(newBlanks)) {
+                          if (!idsInText.has(id)) {
+                            delete newBlanks[id];
+                            hasChanges = true;
+                          }
+                        }
+                        return hasChanges ? newBlanks : prev;
+                      });
+
+                      setClozeDependencies(prev => {
+                        const newDeps = prev.filter(d => idsInText.has(d.sourceBlankId) && idsInText.has(d.targetBlankId));
+                        return newDeps.length !== prev.length ? newDeps : prev;
+                      });
+                    }
+                  }}
                   allowClozeBlanks={type === "next-gen-cloze"}
                   onInsertBlank={(id) => {
                     if (!clozeBlanks[id]) {
@@ -613,12 +642,12 @@ function CreateQuestion() {
                   </div>
                 </Section>
               ) : type === "next-gen-cloze" && (
-                <Section title="Cloze Configuration" desc="Define the options and correct answer for each blank (e.g., {1}, {2}) in the stem.">
+                <Section title="Cloze Configuration" desc="Define the options and correct answer for each dropdown (e.g., {dropdown 1}, {dropdown 2}) in the stem.">
                   <div className="space-y-6">
                     {Object.entries(clozeBlanks).map(([id, blank]) => (
                       <div key={id} className="rounded-xl border border-border bg-muted/20 p-4">
                         <div className="mb-4 flex items-center justify-between">
-                          <h4 className="font-bold text-foreground">Blank {'{'}{id}{'}'}</h4>
+                          <h4 className="font-bold text-foreground">Dropdown {id}</h4>
                           <button
                             onClick={() => {
                               const newBlanks = { ...clozeBlanks };
@@ -675,28 +704,20 @@ function CreateQuestion() {
                         </div>
                       </div>
                     ))}
-                    <button
-                      onClick={() => {
-                        const newId = String(Math.max(0, ...Object.keys(clozeBlanks).map(Number)) + 1);
-                        setClozeBlanks({ ...clozeBlanks, [newId]: { options: ["", "", ""], correct: "" } });
-                      }}
-                      className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-primary bg-primary/5 p-3 text-sm font-medium text-primary hover:bg-primary/10"
-                    >
-                      <Plus className="size-4" /> Add New Blank
-                    </button>
+
 
                     <div className="pt-6 border-t border-border mt-6">
                       <div className="flex items-center justify-between mb-4">
                         <h4 className="text-sm font-semibold text-foreground">Inter-Blank Dependencies (Optional)</h4>
                       </div>
-                      <p className="text-xs text-muted-foreground mb-6">Create rules for multi-part blanks. For example, make Blank 2's options depend on the student's answer for Blank 1.</p>
+                      <p className="text-xs text-muted-foreground mb-6">Create rules for multi-part dropdowns. For example, make Dropdown 2's options depend on the student's answer for Dropdown 1.</p>
 
                       <div className="space-y-6">
                         {clozeDependencies.map((dep, dIdx) => (
                           <div key={dIdx} className="rounded-xl border border-border bg-card overflow-hidden">
                             <div className="bg-muted/40 p-4 border-b border-border flex flex-col md:flex-row md:items-center justify-between gap-4">
                               <div className="flex flex-col md:flex-row md:items-center gap-3">
-                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">Source Blank:</span>
+                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">Source Dropdown:</span>
                                 <select
                                   value={dep.sourceBlankId}
                                   onChange={(e) => {
@@ -706,10 +727,10 @@ function CreateQuestion() {
                                   }}
                                   className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background font-semibold"
                                 >
-                                  <option value="" disabled>Select source blank</option>
-                                  {Object.keys(clozeBlanks).map(bId => <option key={bId} value={bId} disabled={bId === dep.targetBlankId}>Blank {bId}</option>)}
+                                  <option value="" disabled>Select source dropdown</option>
+                                  {Object.keys(clozeBlanks).map(bId => <option key={bId} value={bId} disabled={bId === dep.targetBlankId}>Dropdown {bId}</option>)}
                                 </select>
-                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">determines Target Blank:</span>
+                                <span className="text-sm font-semibold text-foreground whitespace-nowrap">Target Dropdown:</span>
                                 <select
                                   value={dep.targetBlankId}
                                   onChange={(e) => {
@@ -719,8 +740,8 @@ function CreateQuestion() {
                                   }}
                                   className="rounded-lg border border-border px-3 py-1.5 text-sm bg-background font-semibold"
                                 >
-                                  <option value="" disabled>Select target blank</option>
-                                  {Object.keys(clozeBlanks).map(bId => <option key={bId} value={bId}>Blank {bId}</option>)}
+                                  <option value="" disabled>Select target dropdown</option>
+                                  {Object.keys(clozeBlanks).map(bId => <option key={bId} value={bId} disabled={bId === dep.sourceBlankId}>Dropdown {bId}</option>)}
                                 </select>
                               </div>
                               <button
@@ -733,7 +754,7 @@ function CreateQuestion() {
                             
                             {dep.sourceBlankId && dep.targetBlankId && (
                               <div className="p-4 space-y-4">
-                                <p className="text-sm font-medium text-muted-foreground">For each option in Blank {dep.sourceBlankId}, select which options are available in Blank {dep.targetBlankId}:</p>
+                                <p className="text-sm font-medium text-muted-foreground">For each option in Dropdown {dep.sourceBlankId}, select which options are available in Dropdown {dep.targetBlankId}:</p>
                                 
                                 {clozeBlanks[dep.sourceBlankId]?.options.filter(Boolean).map(sourceOpt => (
                                   <div key={sourceOpt} className="bg-background rounded-lg border border-border p-3">
@@ -797,7 +818,7 @@ function CreateQuestion() {
                     <span className="rounded-full bg-info/15 px-2.5 py-1 font-semibold text-info-foreground">{type === "bowtie" ? "BOW-TIE" : type.replace(/-/g, " ").toUpperCase()}</span>
                     <span className="text-muted-foreground">{category} • {subcategory}</span>
                   </div>
-                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: type === "next-gen-cloze" ? stem.replace(/{[0-9]+}/g, "_________") : stem }} />
+                  <div className="prose prose-sm dark:prose-invert max-w-none text-sm leading-relaxed break-words" dangerouslySetInnerHTML={{ __html: type === "next-gen-cloze" ? stem.replace(/{(?:dropdown\s+)?[0-9]+}/g, "_________") : stem }} />
                   <div className="mt-4 space-y-2">
                     {type.startsWith("mcq") ? options.map((o) => (
                       <div key={o.letter} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", o.correct ? "border-success/40 bg-success/5" : "border-border")}>
@@ -812,7 +833,7 @@ function CreateQuestion() {
                       </div>
                     ) : type === "next-gen-cloze" && (
                       <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
-                        <div className="font-semibold text-primary mb-2">Fill in the Blank Dropdown Configured</div>
+                        <div className="font-semibold text-primary mb-2">Fill in the Blank Configured</div>
                         <p className="text-muted-foreground">Configured Blanks: {Object.keys(clozeBlanks).length}</p>
                       </div>
                     )}
@@ -834,7 +855,15 @@ function CreateQuestion() {
                       : type === "bowtie"
                       ? ["Bow-Tie configured", bowtieConfig.conditions?.filter((c: any) => c.isCorrect).length === 1 && bowtieConfig.actions?.some((a: any) => a.isCorrect) && bowtieConfig.parameters?.some((p: any) => p.isCorrect)]
                       : type === "next-gen-cloze"
-                      ? ["Cloze dropdowns configured", Object.values(clozeBlanks).every(b => b.correct !== "" && b.options.every(o => o.trim() !== "")) && !!stem.match(/{([0-9]+)}/g)]
+                      ? ["Cloze dropdowns configured", (() => {
+                          const textContent = stem.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ');
+                          const matches = Array.from(textContent.matchAll(/{(?:dropdown\s+)?([0-9]+)}/g));
+                          const idsInText = new Set(matches.map(m => m[1]));
+                          return Object.values(clozeBlanks).every(b => b.correct !== "" && b.options.every(o => o.trim() !== "")) && 
+                                 matches.length > 0 && 
+                                 Object.keys(clozeBlanks).length === idsInText.size &&
+                                 Object.keys(clozeBlanks).every(id => idsInText.has(id));
+                        })()]
                       : ["Configuration complete", true],
                     ["Rationale provided", !isEmpty(rationale)],
                   ].map(([label, ok]) => (
@@ -940,7 +969,7 @@ function CreateQuestion() {
             <dl className="space-y-3 text-sm">
               {[
                 ["Group", group === "grouped" ? "Grouped" : "Ungrouped"],
-                ["Type", type === "next-gen-cloze" ? "next-gen/fill in the blank dropdown" : type === "bowtie" ? "next-gen/bow-tie" : type.replace(/-/g, " ")],
+                ["Type", type === "next-gen-cloze" ? "Next-Gen/Fill in the Blank" : type === "bowtie" ? "Next-Gen/Bow-tie" : type.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase())],
                 ["Marking", marking === "zero-one" ? "Zero-One" : "Plus / Minus"],
                 ["Category", category],
                 ["Subcategory", subcategory],
@@ -949,7 +978,7 @@ function CreateQuestion() {
               ].map(([k, v]) => (
                 <div key={k} className="flex items-center justify-between border-b border-dashed border-border pb-2 last:border-0">
                   <dt className="text-muted-foreground">{k}</dt>
-                  <dd className="font-semibold capitalize">{v}</dd>
+                  <dd className={cn("font-semibold", k !== "Type" && "capitalize")}>{v}</dd>
                 </div>
               ))}
             </dl>

@@ -2,7 +2,7 @@ import { StudentLayout } from "@/components/layout/StudentLayout";
 import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
-import { DndContext, useDraggable, useDroppable, DragOverlay, closestCenter } from "@dnd-kit/core";
+import { DndContext, useDraggable, useDroppable, DragOverlay, closestCenter, pointerWithin, useSensor, useSensors, PointerSensor } from "@dnd-kit/core";
 import { X, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CheckCircle as CheckCircle2, XCircle, DotsSixVertical as GripVertical, BookOpen, Clock } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -14,6 +14,14 @@ export default function StudentTestSession() {
   const location = useLocation();
   const config = location.state || { type: "traditional" };
   
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    })
+  );
+
   const [activePool, setActivePool] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -143,7 +151,7 @@ export default function StudentTestSession() {
   }, [activePool, timeRemaining, config.mode]);
 
   useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0 || config.mode === 'review' || isSubmitted) return;
+    if (timeRemaining === null || timeRemaining <= 0 || config.mode === 'review') return;
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -156,7 +164,7 @@ export default function StudentTestSession() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, config.mode, isSubmitted]);
+  }, [timeRemaining, config.mode]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -182,7 +190,13 @@ export default function StudentTestSession() {
       case "traditional": 
       case "mcq-single":
         return typeof answerState === "string";
-      case "next-gen-cloze": return Object.keys(activeQuestion.options?.blanks || {}).length > 0 && Object.keys(activeQuestion.options?.blanks || {}).length === Object.keys(answerState).length && Object.values(answerState).every(Boolean);
+      case "next-gen-cloze": {
+        const blankIds = Object.keys(activeQuestion.options?.blanks || {});
+        return blankIds.length > 0 && blankIds.every(id => {
+          const val = answerState[id];
+          return val && activeQuestion.options?.blanks?.[id]?.options?.includes(val);
+        });
+      }
       case "next-gen-matrix": return Object.keys(answerState).length === (activeQuestion.rows?.length || 0);
       case "bowtie": {
         const expectedActs = activeQuestion.options?.actions?.filter((x: any) => x.isCorrect).length || 2;
@@ -277,6 +291,21 @@ export default function StudentTestSession() {
         console.error("Failed to insert test answer:", error);
       }
     }
+  };
+
+  const handleSkip = async () => {
+    if (sessionId && activeQuestion) {
+      const { error } = await supabase.from('test_answers').insert({
+        session_id: sessionId,
+        question_id: activeQuestion.id,
+        selected_options: null,
+        is_correct: false
+      });
+      if (error) {
+        console.error("Failed to insert skipped test answer:", error);
+      }
+    }
+    handleNext();
   };
 
   const handleEndSession = async () => {
@@ -438,13 +467,13 @@ export default function StudentTestSession() {
       const renderNode = (node: Node, index: number): React.ReactNode => {
         if (node.nodeType === Node.TEXT_NODE) {
           const text = node.textContent || '';
-          const parts = text.split(/({[0-9]+})/);
+          const parts = text.split(/({(?:dropdown\s+)?[0-9]+})/);
           if (parts.length === 1) return text;
 
           return (
             <span key={index}>
               {parts.map((part, i) => {
-                const match = part.match(/{([0-9]+)}/);
+                const match = part.match(/{(?:dropdown\s+)?([0-9]+)}/);
                 if (match) {
                   const blankId = match[1];
                   const blank = activeQuestion.options?.blanks?.[blankId];
@@ -466,74 +495,81 @@ export default function StudentTestSession() {
                     }
                   }
                   
-                  // Prevent repeating options: Filter out any options already selected in other blanks
-                  const otherSelectedValues = Object.entries(answers)
-                    .filter(([key, val]) => String(key) !== String(blankId) && val)
-                    .map(([_, val]) => val);
-                  
-                  availableOptions = availableOptions.filter((opt: string) => !otherSelectedValues.includes(opt));
-                  
+                  const validAnswer = availableOptions.includes(answers[blankId]) ? answers[blankId] : "";
+
                   return (
                     <span key={i} className="inline-flex relative mx-1 my-0.5 align-middle">
-                      <div className="relative">
-                        {availableOptions.length === 0 && (
-                          <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
-                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                          </div>
-                        )}
-                        <Select
-                          disabled={isSubmitted || availableOptions.length === 0}
-                          value={answers[blankId] || ""}
-                          onValueChange={(value) => {
-                            const newAns = { ...answers, [blankId]: value };
-                            if (activeQuestion.options?.clozeDependencies) {
-                              const deps = activeQuestion.options.clozeDependencies;
-                              
-                              // Recursively clear all targets that depend on this one, or targets of targets, etc.
-                              let currentSources = [blankId];
-                              let targetsToClear = new Set<string>();
-                              
-                              while (currentSources.length > 0) {
-                                const nextSources: string[] = [];
-                                for (const source of currentSources) {
-                                  const matchingDeps = deps.filter((d: any) => String(d.sourceBlankId) === String(source));
-                                  for (const d of matchingDeps) {
-                                    targetsToClear.add(String(d.targetBlankId));
-                                    nextSources.push(String(d.targetBlankId));
+                      {isSubmitted ? (
+                        <span className={cn(
+                          "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold text-[15px] border shadow-sm",
+                          isAnsweredCorrectly 
+                            ? "bg-green-50 text-green-700 border-green-200" 
+                            : "bg-red-50 text-red-700 border-red-200"
+                        )}>
+                          <span className={cn(!isAnsweredCorrectly && "line-through opacity-70")}>
+                            {answers[blankId] || "No answer"}
+                          </span>
+                          {!isAnsweredCorrectly && (
+                            <>
+                              <span className="text-slate-300">→</span>
+                              <span className="text-green-700">{blank.correct}</span>
+                            </>
+                          )}
+                          {isAnsweredCorrectly ? (
+                            <CheckCircle2 className="size-4" weight="bold" />
+                          ) : (
+                            <XCircle className="size-4 text-red-500" weight="bold" />
+                          )}
+                        </span>
+                      ) : (
+                        <div className="relative">
+                          <Select
+                            disabled={isSubmitted}
+                            value={validAnswer}
+                            onValueChange={(value) => {
+                              const newAns = { ...answers, [blankId]: value };
+                              if (activeQuestion.options?.clozeDependencies) {
+                                const deps = activeQuestion.options.clozeDependencies;
+                                
+                                let currentSources = [blankId];
+                                let targetsToClear = new Set<string>();
+                                
+                                while (currentSources.length > 0) {
+                                  const nextSources: string[] = [];
+                                  for (const source of currentSources) {
+                                    const matchingDeps = deps.filter((d: any) => String(d.sourceBlankId) === String(source));
+                                    for (const d of matchingDeps) {
+                                      targetsToClear.add(String(d.targetBlankId));
+                                      nextSources.push(String(d.targetBlankId));
+                                    }
                                   }
+                                  currentSources = nextSources;
                                 }
-                                currentSources = nextSources;
+                                
+                                for (const target of targetsToClear) {
+                                  newAns[target] = "";
+                                }
                               }
-                              
-                              for (const target of targetsToClear) {
-                                newAns[target] = "";
-                              }
-                            }
-                            setAnswerState(newAns);
-                          }}
-                        >
-                          <SelectTrigger
-                            className={cn(
-                              "h-10 cursor-pointer rounded-xl border px-4 text-[15px] font-medium outline-none transition-all min-w-[200px] shadow-none [&>span]:w-full [&>span]:text-left",
-                              availableOptions.length > 0 
-                                 ? (!isSubmitted && "border-slate-300 bg-white hover:border-teal-700 focus:border-teal-700 focus:ring-1 focus:ring-teal-700 text-slate-800 [&>svg]:text-teal-700 [&>svg]:opacity-100")
-                                 : "border-slate-200 bg-slate-100 text-slate-400 pl-11 [&>svg]:opacity-30",
-                              isSubmitted && isAnsweredCorrectly && "border-green-500 bg-green-50 text-green-700 font-semibold [&>svg]:text-green-700",
-                              isSubmitted && !isAnsweredCorrectly && "border-red-500 bg-red-50 text-red-700 font-semibold [&>svg]:text-red-700",
-                              availableOptions.length === 0 && "cursor-not-allowed"
-                            )}
+                              setAnswerState(newAns);
+                            }}
                           >
-                            <SelectValue placeholder={availableOptions.length === 0 ? "Select Blank 1 first" : "Select answer"} />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-[300px]">
-                            {availableOptions.map((opt: string) => (
-                              <SelectItem key={opt} value={opt} className="text-[15px] cursor-pointer">
-                                {opt}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                            <SelectTrigger
+                              className={cn(
+                                "h-10 cursor-pointer rounded-xl border px-4 text-[15px] font-medium outline-none transition-all min-w-[200px] shadow-none [&>span]:w-full [&>span]:text-left border-slate-300 bg-white hover:border-teal-700 focus:border-teal-700 focus:ring-1 focus:ring-teal-700 text-slate-800 [&>svg]:text-teal-700 [&>svg]:opacity-100"
+                              )}
+                            >
+                              <SelectValue placeholder="Select answer" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[300px]">
+                              {availableOptions.map((opt: string) => (
+                                <SelectItem key={opt} value={opt} className="text-[15px] cursor-pointer">
+                                  {opt}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                     </span>
                   );
                 }
@@ -574,7 +610,7 @@ export default function StudentTestSession() {
     };
     
     return (
-      <div className="leading-[2.5rem] text-lg text-slate-800">
+      <div className="leading-[3rem] text-lg text-slate-800">
         {parseHtmlToReact(activeQuestion.text)}
       </div>
     );
@@ -746,10 +782,6 @@ export default function StudentTestSession() {
         return;
       }
 
-      if (sourceType !== "bank-options" && sourceType !== `bank-${targetType}` && !sourceType.startsWith(`${targetType}-`)) {
-        setAnswerState(newState); 
-        return;
-      }
 
       const targetIdx = parseInt(idxStr);
       newState[targetType][targetIdx] = word;
@@ -757,7 +789,7 @@ export default function StudentTestSession() {
       setAnswerState(newState);
     };
 
-    const DraggableWord = ({ word, typeId }: { word: string, typeId: string }) => {
+    const DraggableWord = ({ word, typeId, state }: { word: string, typeId: string, state?: 'correct' | 'incorrect' }) => {
       const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
         id: `${typeId}::${word}`,
         data: { word, typeId },
@@ -765,6 +797,13 @@ export default function StudentTestSession() {
       });
       const style = transform ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 50 } : undefined;
       
+      let stateClass = "bg-white text-slate-700 border-slate-200 hover:border-slate-300";
+      if (state === 'correct') {
+        stateClass = "bg-green-50 text-green-800 border-green-500 ring-1 ring-green-500 hover:border-green-500";
+      } else if (state === 'incorrect') {
+        stateClass = "bg-red-50 text-red-800 border-red-500 ring-1 ring-red-500 hover:border-red-500";
+      }
+
       return (
         <button
           ref={setNodeRef}
@@ -772,16 +811,14 @@ export default function StudentTestSession() {
           {...listeners}
           {...attributes}
           className={cn(
-            "relative flex items-stretch rounded-lg bg-white text-xs font-medium text-slate-700 shadow-[0_1px_4px_-1px_rgba(0,0,0,0.05)] border border-slate-200 touch-none group hover:shadow-sm hover:border-slate-300",
-            !typeId.startsWith("bank-") && "w-full",
+            "relative flex items-stretch rounded-lg text-[15px] font-medium shadow-[0_1px_4px_-1px_rgba(0,0,0,0.05)] border touch-none group hover:shadow-sm",
+            stateClass,
+            !typeId.startsWith("bank-") ? "w-full h-full min-h-[3rem]" : "",
             isDragging ? "opacity-95 ring-2 ring-blue-400/30 scale-105 shadow-md rotate-1 z-50 transition-none" : "transition-all duration-300 ease-out",
-            isSubmitted && "opacity-75 cursor-default hover:transform-none hover:shadow-sm hover:border-slate-200"
+            isSubmitted && "opacity-90 cursor-default hover:transform-none hover:shadow-sm"
           )}
         >
-          <div className="flex items-center justify-center px-1.5 py-2 border-r border-slate-100 text-slate-300 group-hover:text-slate-400">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm7-7a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"/></svg>
-          </div>
-          <div className="px-3 py-2 text-center flex-1">
+          <div className="px-4 py-2.5 flex-1 flex items-center justify-center text-center">
             <span className="tracking-tight leading-tight">{word}</span>
           </div>
         </button>
@@ -806,8 +843,7 @@ export default function StudentTestSession() {
       }
 
       if (isSubmitted && value) {
-        if (isExpected(value)) uiClass = "bg-green-50 border-green-300 text-green-700 p-0 border-solid";
-        else uiClass = "bg-red-50 border-red-300 text-red-700 p-0 border-solid";
+        uiClass = "border-transparent bg-transparent p-0";
       } else if (isSubmitted && !value) {
         uiClass = "bg-red-50 text-red-500 border-dashed border-red-300";
       }
@@ -815,15 +851,14 @@ export default function StudentTestSession() {
       return (
         <div 
           ref={setNodeRef}
-          className={cn("flex min-h-[5.5rem] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 transition-colors duration-200 cursor-pointer relative", uiClass)}
+          className={cn("flex min-h-[3rem] w-full flex-col items-center justify-center rounded-xl border px-2 py-2 transition-colors duration-200 cursor-pointer relative", uiClass)}
         >
           {value ? (
             <div className="flex w-full h-full items-center justify-center animate-in zoom-in-95 duration-200">
-               <DraggableWord word={value} typeId={id} />
+               <DraggableWord word={value} typeId={id} state={isSubmitted ? (isExpected(value) ? 'correct' : 'incorrect') : undefined} />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2">
-              <div className={cn("w-8 h-8 rounded-full border-[1.5px] border-dashed flex items-center justify-center", isCause ? "border-blue-400/70" : "border-teal-400/70")}></div>
               <span className="text-xs font-semibold uppercase tracking-wider text-center">{label}</span>
             </div>
           )}
@@ -848,9 +883,10 @@ export default function StudentTestSession() {
     };
 
     return (
-      <DndContext onDragEnd={handleDragEnd} collisionDetection={closestCenter}>
-        <div className="w-full rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden select-none relative z-0 mt-6 max-w-6xl mx-auto">
-          <div className="flex flex-col md:flex-row items-stretch justify-center p-8 gap-4 w-full">
+      <DndContext onDragEnd={handleDragEnd} sensors={sensors} collisionDetection={pointerWithin}>
+        <div className="w-full max-w-[90rem] mx-auto mt-6 flex flex-col gap-6">
+          <div className="w-full rounded-2xl bg-white border border-slate-200 shadow-sm select-none relative z-10">
+            <div className="flex flex-col md:flex-row items-stretch justify-center p-6 lg:p-8 gap-4 w-full">
              
              {/* Actions Left */}
              <div className="flex-[1.2] flex flex-col">
@@ -889,7 +925,7 @@ export default function StudentTestSession() {
                  <span className="text-[13px] font-bold text-teal-700 uppercase tracking-widest">Core Condition</span>
                </div>
                <div className="flex-1 flex flex-col items-center justify-center relative">
-                 <div className="w-full flex flex-col items-center justify-center bg-white rounded-xl border border-teal-500/70 shadow-sm px-6 py-10 min-h-[11rem]">
+                 <div className="w-full flex flex-col items-center justify-center bg-white rounded-xl border border-teal-500/70 shadow-sm px-6 py-4 min-h-[5rem]">
                     <span className="text-xl font-bold text-teal-800 text-center break-words">{correctConditions[0]?.text || "Unknown Condition"}</span>
                  </div>
                </div>
@@ -929,33 +965,39 @@ export default function StudentTestSession() {
                    <DroppableSlot key={i} label={`Treatment ${i+1}`} id={`parameters-${i}`} type="treatment" value={state.parameters?.[i]} isExpected={(v: string) => correctParameters.some((c: any) => c.text === v)} />
                  ))}
                </div>
-             </div>
-          </div>
-          
-          <div className="border-t border-slate-200 flex flex-col bg-slate-50/30">
-            <div className="flex items-center px-6 py-4 border-b border-slate-200 bg-white shrink-0">
-               <div className="flex items-center gap-3">
-                 <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
-                   <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M10 3H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zM9 9H5V5h4v4zm11-6h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4a1 1 0 0 0-1-1zm-1 6h-4V5h4v4zm-9 4H4a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm-1 6H5v-4h4v4zm11-6h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1zm-1 6h-4v-4h4v4z"/></svg>
-                 </div>
-                 <span className="text-xs font-bold text-slate-800 uppercase tracking-widest whitespace-nowrap">Word Bank</span>
-               </div>
-            </div>
-            <DroppableWordBank id="bank-options" className="flex flex-row flex-wrap items-center gap-3 p-6 flex-1 min-h-[100px]">
-              {(() => {
-                  const allOptions = [
-                    ...(config.actions || []),
-                    ...(config.parameters || [])
-                  ].filter(item => item.text).sort((a, b) => a.text.localeCompare(b.text));
+              </div>
+           </div>
+         </div>
+           
+         {isSubmitted ? (
+           <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-6 h-fit">
+             <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-slate-900">
+               <BookOpen weight="fill" className="size-5 text-teal-700" />
+               Detailed Explanation
+             </h3>
+             <div 
+               className="text-[13px] leading-relaxed text-slate-600 break-words prose prose-sm prose-slate max-w-none"
+               dangerouslySetInnerHTML={{ __html: activeQuestion.rationale || "No explanation provided for this question." }}
+             />
+           </div>
+         ) : (
+           <div className="w-full rounded-2xl bg-white border border-slate-200 shadow-sm select-none flex flex-col bg-slate-50/30 relative z-20">
+              <DroppableWordBank id="bank-options" className="flex flex-row flex-wrap items-center justify-center gap-4 p-6 flex-1 min-h-[100px]">
+                {(() => {
+                    const allOptions = [
+                      ...(config.actions || []),
+                      ...(config.parameters || [])
+                    ].filter((item: any) => item.text).sort((a: any, b: any) => a.text.localeCompare(b.text));
 
-                  return allOptions.map((item: any, idx: number) => {
-                    const isUsed = state.actions?.includes(item.text) || state.parameters?.includes(item.text);
-                    if (isUsed) return <div key={`${item.text}-${idx}`} className="h-[34px] w-[1px] opacity-0 pointer-events-none m-0 p-0 overflow-hidden"></div>;
-                    return <DraggableWord key={`${item.text}-${idx}`} word={item.text} typeId="bank-options" />;
-                  });
-              })()}
-            </DroppableWordBank>
-          </div>
+                    return allOptions.map((item: any, idx: number) => {
+                      const isUsed = state.actions?.includes(item.text) || state.parameters?.includes(item.text);
+                      if (isUsed) return <div key={`${item.text}-${idx}`} className="h-[34px] w-[1px] opacity-0 pointer-events-none m-0 p-0 overflow-hidden"></div>;
+                      return <DraggableWord key={`${item.text}-${idx}`} word={item.text} typeId="bank-options" />;
+                    });
+                })()}
+              </DroppableWordBank>
+            </div>
+         )}
         </div>
       </DndContext>
     );
@@ -967,25 +1009,11 @@ export default function StudentTestSession() {
       case "mcq-single":
         return renderTraditional();
       case "next-gen-cloze": return (
-        <div className="rounded-xl border border-slate-200 bg-white overflow-hidden shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)]">
-          <div className="flex items-center gap-4 px-6 py-5 border-b border-slate-100">
-             <div className="w-10 h-10 rounded-lg bg-slate-100/80 text-slate-600 flex items-center justify-center shrink-0">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-             </div>
-             <h2 className="text-[13px] font-bold uppercase tracking-widest text-slate-800">Case Study</h2>
-          </div>
-          <div className="p-8 pb-10">
-            {renderCloze()}
-            
-            {activeQuestion.options?.clozeDependentMode && (
-              <div className="mt-10 flex items-center gap-3 rounded-lg border border-teal-100 bg-teal-50/50 p-4 text-teal-800">
-                <div className="text-teal-700">
-                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                </div>
-                <span className="text-[13px] font-medium">Blank 2 options depend on your first selection.</span>
-              </div>
-            )}
-          </div>
+        <div className={cn(
+          "rounded-xl overflow-hidden",
+          !isSubmitted ? "border border-slate-200 bg-white shadow-[0_2px_12px_-4px_rgba(0,0,0,0.05)] p-8 pb-10" : ""
+        )}>
+          {renderCloze()}
         </div>
       );
       case "next-gen-matrix": return renderMatrix();
@@ -1021,7 +1049,7 @@ export default function StudentTestSession() {
               Question {currentIndex + 1} of {activePool.length}
             </div>
             <span className="rounded-full bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-700 md:ml-2">
-              {activeQuestion.type === "next-gen-cloze" ? "fill in the blanks drop down" : activeQuestion.type.replace(/-/g, " ")}
+              {activeQuestion.type === "next-gen-cloze" ? "Fill in the Blank" : activeQuestion.type.replace(/-/g, " ")}
             </span>
           </div>
           
@@ -1054,7 +1082,7 @@ export default function StudentTestSession() {
 
         {/* Question Area */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8 flex justify-center items-start">
-          <div className={cn("w-full h-fit transition-all duration-300", activeQuestion.type === "bowtie" ? "max-w-6xl" : "max-w-4xl")}>
+          <div className="w-full h-fit transition-all duration-300 max-w-[90rem]">
             
             {timeRemaining === 0 ? (
               <div className="flex flex-col items-center justify-center space-y-6 rounded-2xl border border-red-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
@@ -1088,13 +1116,22 @@ export default function StudentTestSession() {
                       
                       {activeQuestion.type === "next-gen-cloze" ? (
                         <>
-                          <div className="mb-2 text-[22px] font-bold leading-snug text-slate-900">Complete the statement</div>
-                          <div className="mb-8 text-[15px] text-slate-500">Choose an answer for Blank 1 to unlock Blank 2.</div>
+                          <div className="mb-2 text-[22px] font-medium leading-snug text-slate-900">Complete the statement</div>
+                          <div className="mb-8 flex items-center gap-2 text-[15px] text-slate-500">
+                            {(activeQuestion.options?.clozeDependentMode || (activeQuestion.options?.clozeDependencies && activeQuestion.options.clozeDependencies.length > 0)) ? (
+                              <>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-teal-600"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                                <span className="font-medium text-teal-700">Options for some blanks depend on your previous selections. Fill them out in order.</span>
+                              </>
+                            ) : (
+                              "Select an option from the dropdown for each blank."
+                            )}
+                          </div>
                         </>
                       ) : (
                         <>
                           <div 
-                            className="mb-3 text-[22px] font-bold leading-snug text-slate-900"
+                            className="mb-3 text-[22px] font-medium leading-snug text-slate-900"
                             dangerouslySetInnerHTML={{ __html: activeQuestion.text }}
                           />
                           {(activeQuestion.type.startsWith('mcq') || activeQuestion.type === 'next-gen-sata') && (
@@ -1110,26 +1147,30 @@ export default function StudentTestSession() {
                   ) : (
                     <div className="animate-in fade-in duration-500">
                       <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question Review</div>
-                      <div 
-                        className="mb-8 text-[22px] font-bold leading-snug text-slate-900"
-                        dangerouslySetInnerHTML={{ __html: activeQuestion.type === "next-gen-cloze" ? activeQuestion.text.replace(/{[0-9]+}/g, "_________") : activeQuestion.text }}
-                      />
+                      {activeQuestion.type !== "next-gen-cloze" && (
+                        <div 
+                          className="mb-8 text-[22px] font-medium leading-snug text-slate-900"
+                          dangerouslySetInnerHTML={{ __html: activeQuestion.text }}
+                        />
+                      )}
                       
                       <div className={cn("grid grid-cols-1 gap-10", activeQuestion.type === "bowtie" ? "" : "lg:grid-cols-[1fr_360px]")}>
                         <div className="min-w-0">
                           {renderContent()}
                         </div>
                         
-                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 h-fit">
-                          <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-slate-900">
-                            <BookOpen weight="fill" className="size-5 text-teal-700" />
-                            Detailed Explanation
-                          </h3>
-                          <div 
-                            className="text-[13px] leading-relaxed text-slate-600 break-words prose prose-sm prose-slate"
-                            dangerouslySetInnerHTML={{ __html: activeQuestion.rationale || "No explanation provided for this question." }}
-                          />
-                        </div>
+                        {activeQuestion.type !== "bowtie" && (
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-6 h-fit">
+                            <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-slate-900">
+                              <BookOpen weight="fill" className="size-5 text-teal-700" />
+                              Detailed Explanation
+                            </h3>
+                            <div 
+                              className="text-[13px] leading-relaxed text-slate-600 break-words prose prose-sm prose-slate max-w-none"
+                              dangerouslySetInnerHTML={{ __html: activeQuestion.rationale || "No explanation provided for this question." }}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1145,15 +1186,19 @@ export default function StudentTestSession() {
                       activeQuestion.type === 'next-gen-cloze' ? (
                         <div className="flex items-center gap-4">
                            <span className="text-[13px] font-medium text-slate-600">
-                             {Object.values(answerState || {}).filter(Boolean).length} of {Object.keys(activeQuestion.options?.blanks || {}).length} blanks completed
+                             {Object.keys(activeQuestion.options?.blanks || {}).filter(id => {
+                               const val = (answerState || {})[id];
+                               return val && activeQuestion.options?.blanks?.[id]?.options?.includes(val);
+                             }).length} of {Object.keys(activeQuestion.options?.blanks || {}).length} blanks completed
                            </span>
                            <div className="h-1.5 w-24 rounded-full bg-slate-200 overflow-hidden">
-                              <div className="h-full bg-slate-400 transition-all" style={{ width: `${(Object.values(answerState || {}).filter(Boolean).length / Object.keys(activeQuestion.options?.blanks || {}).length) * 100}%` }}></div>
+                              <div className="h-full bg-slate-400 transition-all" style={{ width: `${(Object.keys(activeQuestion.options?.blanks || {}).filter(id => {
+                                 const val = (answerState || {})[id];
+                                 return val && activeQuestion.options?.blanks?.[id]?.options?.includes(val);
+                              }).length / Math.max(1, Object.keys(activeQuestion.options?.blanks || {}).length)) * 100}%` }}></div>
                            </div>
                         </div>
-                      ) : (
-                        <span className="text-[13px] text-slate-400">You can change your answer before submitting.</span>
-                      )
+                      ) : null
                     )}
                   </div>
                   
@@ -1176,13 +1221,21 @@ export default function StudentTestSession() {
                         )}
                       </div>
                     ) : !isSubmitted ? (
-                      <button
-                        disabled={!canSubmit || timeRemaining === 0}
-                        onClick={handleSubmitAnswer}
-                        className="flex items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-[15px] font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        Submit answer <ChevronRight weight="bold" className="size-4" />
-                      </button>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={handleSkip}
+                          className="rounded-lg border border-slate-200 px-6 py-2.5 text-[15px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                        >
+                          Next
+                        </button>
+                        <button
+                          disabled={!canSubmit || timeRemaining === 0}
+                          onClick={handleSubmitAnswer}
+                          className="flex items-center gap-2 rounded-lg bg-teal-700 px-6 py-2.5 text-[15px] font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          Submit answer <ChevronRight weight="bold" className="size-4" />
+                        </button>
+                      </div>
                     ) : (
                       <button
                         onClick={handleNext}

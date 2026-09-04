@@ -107,7 +107,14 @@
 
 @layer base {
   * { border-color: var(--color-border); }
-  html, body { font-family: var(--font-display); }
+  html, body { 
+    font-family: var(--font-display); 
+  }
+  html, body, #root {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+  }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);

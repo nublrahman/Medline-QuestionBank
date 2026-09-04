@@ -365,9 +365,6 @@ function CategoriesPage() {
                             ) : subQuestions.length > 0 ? (
                               <div className="space-y-2">
                                 {subQuestions.map(q => {
-                                  const temp = document.createElement('div');
-                                  temp.innerHTML = q.stem;
-                                  const stemText = temp.textContent || temp.innerText || "";
                                   return (
                                     <div key={q.id} onClick={() => setPreviewQuestion(q)} className="cursor-pointer rounded-lg border border-border bg-background p-3 hover:border-primary/40 transition-colors">
                                       <div className="mb-1 flex items-center justify-between">
@@ -480,7 +477,7 @@ function CategoriesPage() {
                 className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
                 dangerouslySetInnerHTML={{ 
                   __html: previewQuestion.type === "next-gen-cloze" 
-                    ? (previewQuestion.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                    ? (previewQuestion.stem || "").replace(/{(?:dropdown\s+)?([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
                     : (previewQuestion.stem || "") 
                 }} 
               />
@@ -532,7 +529,7 @@ function CategoriesPage() {
                   </div>
                 ) : previewQuestion.type === "next-gen-cloze" && (
                   <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
-                    <div className="font-semibold text-primary mb-3">Fill in the Blanks</div>
+                    <div className="font-semibold text-primary mb-3">Fill in the Blank</div>
                     <div className="space-y-2">
                       {Object.entries(previewQuestion.options?.blanks || {}).map(([key, blank]: [string, any]) => (
                         <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-background border">
