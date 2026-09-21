@@ -130,8 +130,6 @@ export default function StudentCreateTest() {
                 icon={Layers}
                 title="Mixed Mode"
                 description="A random distribution of all question types"
-                disabled
-                comingSoon
               />
             </div>
           </div>

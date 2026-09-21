@@ -58,7 +58,12 @@ export default function StudentTestHistory() {
               if (uniqueCategories.length > 0) {
                 category = uniqueCategories.join(', ');
               }
-              type = answers[0].questions.type?.startsWith('mcq') || answers[0].questions.type === 'traditional' ? 'Traditional' : 'Next-Gen';
+              const hasTraditional = answers.some((a: any) => a.questions?.type?.startsWith('mcq') || a.questions?.type === 'traditional');
+              const hasNextGen = answers.some((a: any) => a.questions?.type && !a.questions?.type?.startsWith('mcq') && a.questions?.type !== 'traditional');
+              
+              if (hasTraditional && hasNextGen) type = "Mixed Mode";
+              else if (hasTraditional) type = "Traditional";
+              else if (hasNextGen) type = "Next-Gen";
             }
 
             let duration = "Unknown";

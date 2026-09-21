@@ -158,8 +158,8 @@ export function StudentRootLayout({ children }: { children: ReactNode }) {
 
   return (
     <LayoutContext.Provider value={{ ...layout, setLayout }}>
-      <div className={cn("min-h-screen flex flex-col", !isTestSession ? "bg-gradient-to-br from-[#c1e3e4] via-[#e2e8f0] to-[#e4e0f0] p-2 lg:p-3" : "bg-slate-50")}>
-        <div className={cn("relative flex w-full overflow-hidden", !isTestSession ? "min-h-[calc(100vh-1rem)] lg:min-h-[calc(100vh-1.5rem)] rounded-[1.5rem] border border-white/60 bg-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)]" : "min-h-screen")}>
+      <div className={cn("flex flex-col", !isTestSession ? "min-h-screen bg-gradient-to-br from-[#c1e3e4] via-[#e2e8f0] to-[#e4e0f0] p-2 lg:p-3" : "h-screen h-[100dvh] bg-slate-50 overflow-hidden")}>
+        <div className={cn("relative flex w-full overflow-hidden min-h-0 flex-1", !isTestSession ? "min-h-[calc(100vh-1rem)] lg:min-h-[calc(100vh-1.5rem)] rounded-[1.5rem] border border-white/60 bg-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)]" : "h-full")}>
         
         {/* Only render sidebar and header if not in a test session */}
         {!isTestSession && (
@@ -194,7 +194,7 @@ export function StudentRootLayout({ children }: { children: ReactNode }) {
         )}
 
         {/* Main Content Area */}
-        <div className={cn("flex flex-1 flex-col overflow-y-auto scroll-smooth", !isTestSession ? "h-[calc(100vh-1rem)] lg:h-[calc(100vh-1.5rem)]" : "min-h-screen")}>
+        <div className={cn("flex flex-1 flex-col overflow-y-auto scroll-smooth min-h-0", !isTestSession ? "h-[calc(100vh-1rem)] lg:h-[calc(100vh-1.5rem)]" : "h-full overflow-hidden")}>
           {!isTestSession && (
             <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/30 bg-white/30 px-6 py-5 backdrop-blur-md xl:flex-row xl:items-center transform-gpu">
               <div className="min-w-0 flex-1">
@@ -268,8 +268,8 @@ export function StudentRootLayout({ children }: { children: ReactNode }) {
             </header>
           )}
 
-          <div className={cn("flex-1", !isTestSession && "pb-10")}>
-            {layout.actions && !isTestSession && <div className="px-6 pt-5">{layout.actions}</div>}
+          <div className={cn("flex-1 flex flex-col min-h-0", !isTestSession && "pb-10")}>
+            {layout.actions && !isTestSession && <div className="px-6 pt-5 shrink-0">{layout.actions}</div>}
             
             {children}
           </div>

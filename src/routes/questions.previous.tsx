@@ -25,8 +25,15 @@ const tabs = ["All", "Published", "Drafts"] as const;
 
 const formatQuestionType = (type: string) => {
   if (!type) return "";
-  if (type === 'bowtie') return 'next-gen/bow-tie';
-  if (type === 'next-gen-cloze') return 'next-gen/fill in the blank';
+  if (type === 'bowtie') return 'Next-Gen / Bow-Tie';
+  if (type === 'next-gen-cloze') return 'Next-Gen / Fill in the Blank';
+  if (type === 'table') return 'Next-Gen / Table';
+  if (type === 'next-gen-matrix') return 'Next-Gen / Matrix';
+  if (type === 'next-gen-order') return 'Next-Gen / Order';
+  if (type === 'next-gen-highlight') return 'Next-Gen / Highlight';
+  if (type === 'next-gen-sata') return 'Next-Gen / SATA';
+  if (type === 'mcq-single' || type === 'traditional') return 'Traditional / MCQ';
+  if (type === 'mcq-multi') return 'Traditional / SATA';
   return type;
 };
 
@@ -235,7 +242,9 @@ function PreviousQuestions() {
                     <div className="text-xs text-muted-foreground">Updated {new Date(r.created_at).toLocaleDateString()}</div>
                   </td>
                   <td className="p-3 text-center">
-                    <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground">{formatQuestionType(r.type)}</span>
+                    <span className="rounded-full bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground whitespace-nowrap">
+                      {r.group_type === 'grouped' ? 'Grouped Question' : formatQuestionType(r.type)}
+                    </span>
                   </td>
                   <td className="p-3">
                     <div className="font-medium">{r.category}</div>

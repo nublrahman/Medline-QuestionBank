@@ -6,12 +6,17 @@ import Underline from "@tiptap/extension-underline";
 import Subscript from "@tiptap/extension-subscript";
 import Superscript from "@tiptap/extension-superscript";
 import TextAlign from "@tiptap/extension-text-align";
-import { TextB as Bold, TextItalic as Italic, TextUnderline as UnderlineIcon, TextStrikethrough as Strikethrough, CaretDown as SubscriptIcon, CaretUp as SuperscriptIcon, TextAlignLeft as AlignLeft, TextAlignCenter as AlignCenter, TextAlignRight as AlignRight, ListBullets as List, ListNumbers as ListOrdered, Link as LinkIcon, Image as ImageIcon, IconContext } from "@phosphor-icons/react";
+import { TextB as Bold, TextItalic as Italic, TextUnderline as UnderlineIcon, TextStrikethrough as Strikethrough, CaretDown as SubscriptIcon, CaretUp as SuperscriptIcon, TextAlignLeft as AlignLeft, TextAlignCenter as AlignCenter, TextAlignRight as AlignRight, ListBullets as List, ListNumbers as ListOrdered, Link as LinkIcon, Image as ImageIcon, IconContext, Table as TableIcon } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "./dialog";
 import { Button } from "./button";
 import { Input } from "./input";
+import { Popover, PopoverTrigger, PopoverContent } from "./popover";
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TableHeader } from '@tiptap/extension-table-header'
 
 interface RichTextEditorProps {
   value: string;
@@ -39,6 +44,12 @@ export function RichTextEditor({ value, onChange, placeholder, className, allowC
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
     ],
     content: value,
     onUpdate: ({ editor }) => {
@@ -95,6 +106,12 @@ export function RichTextEditor({ value, onChange, placeholder, className, allowC
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value);
+    }
+  }, [value, editor]);
 
   if (!editor) {
     return null;
@@ -307,6 +324,41 @@ export function RichTextEditor({ value, onChange, placeholder, className, allowC
           >
             <ListOrdered className="size-4" />
           </button>
+        </div>
+
+        <div className="flex items-center gap-1 border-r border-border pr-1 mr-1">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  "grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground",
+                  editor.isActive("table") && "bg-muted text-foreground"
+                )}
+              >
+                <TableIcon className="size-4" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-2 space-y-1 bg-background" align="start">
+              <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+                Insert Table (3x3)
+              </Button>
+              {editor.isActive('table') && (
+                <>
+                  <div className="h-px bg-border my-1" />
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium" onClick={() => editor.chain().focus().addColumnBefore().run()}>Add Column Before</Button>
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium" onClick={() => editor.chain().focus().addColumnAfter().run()}>Add Column After</Button>
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => editor.chain().focus().deleteColumn().run()}>Delete Column</Button>
+                  <div className="h-px bg-border my-1" />
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium" onClick={() => editor.chain().focus().addRowBefore().run()}>Add Row Before</Button>
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium" onClick={() => editor.chain().focus().addRowAfter().run()}>Add Row After</Button>
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => editor.chain().focus().deleteRow().run()}>Delete Row</Button>
+                  <div className="h-px bg-border my-1" />
+                  <Button variant="ghost" className="w-full justify-start h-8 text-xs font-medium text-destructive hover:bg-destructive/10 hover:text-destructive" onClick={() => editor.chain().focus().deleteTable().run()}>Delete Table</Button>
+                </>
+              )}
+            </PopoverContent>
+          </Popover>
         </div>
 
         <div className="flex items-center gap-1">
