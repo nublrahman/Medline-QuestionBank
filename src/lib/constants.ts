@@ -1,7 +1,7 @@
 export const questionTypes = {
   traditional: [
     { id: "mcq-single", name: "MCQ Single Answer", desc: "One correct answer." },
-    { id: "mcq-multi", name: "MCQ Multiple Answer", desc: "SATA — multiple correct." },
+    { id: "mcq-multi", name: "MCQ Multiple Answer", desc: "Multi-MCQ — multiple correct." },
   ],
   ngn: [
     { id: "bowtie", name: "Bow-Tie", desc: "Cause & effect diagram." },

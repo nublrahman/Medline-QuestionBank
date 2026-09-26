@@ -174,8 +174,8 @@ export function RootLayout({ children }: { children: ReactNode }) {
 
   return (
     <LayoutContext.Provider value={{ ...layout, setLayout }}>
-    <div className="min-h-screen bg-gradient-to-br from-[#c1e3e4] via-[#e2e8f0] to-[#e4e0f0] p-2 lg:p-3 flex flex-col">
-      <div className="relative flex min-h-[calc(100vh-1rem)] lg:min-h-[calc(100vh-1.5rem)] w-full overflow-hidden rounded-[1.5rem] border border-white/60 bg-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+    <div className="h-screen overflow-hidden bg-gradient-to-br from-[#c1e3e4] via-[#e2e8f0] to-[#e4e0f0] p-2 lg:p-3 flex flex-col">
+      <div className="relative flex flex-1 w-full overflow-hidden rounded-[1.5rem] border border-white/60 bg-white/40 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
       {/* Sidebar */}
       <aside className="hidden w-72 shrink-0 flex-col border-r border-white/30 p-5 lg:flex">
         <div className="mb-8 flex items-center gap-3 px-1">
@@ -225,7 +225,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main */}
-      <div className="flex flex-1 flex-col h-[calc(100vh-1rem)] lg:h-[calc(100vh-1.5rem)] overflow-y-auto scroll-smooth">
+      <div className="flex flex-1 flex-col overflow-y-auto scroll-smooth">
         <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/30 bg-white/30 px-6 py-5 backdrop-blur-md xl:flex-row xl:items-center transform-gpu">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-bold tracking-tight text-foreground">{layout.title}</h1>

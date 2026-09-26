@@ -31,10 +31,92 @@ const formatQuestionType = (type: string) => {
   if (type === 'next-gen-matrix') return 'Next-Gen / Matrix';
   if (type === 'next-gen-order') return 'Next-Gen / Order';
   if (type === 'next-gen-highlight') return 'Next-Gen / Highlight';
-  if (type === 'next-gen-sata') return 'Next-Gen / SATA';
+  if (type === 'next-gen-sata') return 'Next-Gen / Multi-MCQ';
   if (type === 'mcq-single' || type === 'traditional') return 'Traditional / MCQ';
-  if (type === 'mcq-multi') return 'Traditional / SATA';
+  if (type === 'mcq-multi') return 'Traditional / Multi-MCQ';
   return type;
+};
+
+const renderOptionsPreview = (q: any) => {
+  const getOpts = (type: string) => {
+    if (type === "bowtie") return q.bowtieConfig || q.options;
+    if (type === "next-gen-cloze") return q.clozeBlanks ? { blanks: q.clozeBlanks } : q.options;
+    if (type === "table") return q.tableConfig || q.options;
+    if (type === "next-gen-highlight") return q.highlightConfig || q.options;
+    return q.options;
+  };
+
+  const opts = getOpts(q.type);
+
+  if (q.type?.startsWith("mcq")) {
+    return opts?.map((o: any) => (
+      <div key={o.letter} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", o.correct ? "border-success/40 bg-success/5" : "border-border")}>
+        <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold shrink-0">{o.letter}</div>
+        <span className="flex-1 break-words min-w-0">{o.text}</span>
+        {o.correct && <Check className="ml-auto size-4 text-success-foreground" />}
+      </div>
+    ));
+  }
+  if (q.type === "bowtie") {
+    return (
+      <div className="rounded-xl border border-border p-5 text-sm bg-muted/10">
+        <div className="font-semibold text-teal-800 mb-6 text-sm">Bow-Tie Correct Answers</div>
+        <div className="flex flex-col md:flex-row items-stretch justify-center gap-4">
+           <div className="flex-1 flex flex-col justify-start items-center bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 w-full text-center min-h-[120px]">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 mb-3">{opts?.actionLabel || "Causes & Assessments"}</div>
+              <div className="space-y-1.5 text-[13px] text-slate-700 font-medium w-full">
+                 {opts?.actions?.map((a: any, i: number) => (
+                   <div key={i} className={cn("py-1.5 px-2.5 rounded-md border text-center flex items-center justify-center gap-2", a.isCorrect ? "bg-teal-50 border-teal-200 text-teal-800 font-semibold" : "bg-slate-50 border-slate-100 text-slate-500")}>
+                     {a.isCorrect && <Check className="w-3.5 h-3.5 shrink-0 text-teal-600" />}
+                     <span>{a.text || "—"}</span>
+                   </div>
+                 ))}
+              </div>
+           </div>
+           <div className="flex-1 flex flex-col justify-start items-center bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 w-full text-center min-h-[120px]">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 mb-3">{opts?.conditionLabel || "Core Conditions"}</div>
+              <div className="space-y-1.5 text-[13px] text-slate-700 font-medium w-full">
+                 {opts?.conditions?.map((a: any, i: number) => (
+                   <div key={i} className={cn("py-1.5 px-2.5 rounded-md border text-center flex items-center justify-center gap-2", a.isCorrect ? "bg-teal-50 border-teal-200 text-teal-800 font-semibold" : "bg-slate-50 border-slate-100 text-slate-500")}>
+                     {a.isCorrect && <Check className="w-3.5 h-3.5 shrink-0 text-teal-600" />}
+                     <span>{a.text || "—"}</span>
+                   </div>
+                 ))}
+              </div>
+           </div>
+           <div className="flex-1 flex flex-col justify-start items-center bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 w-full text-center min-h-[120px]">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 mb-3">{opts?.parameterLabel || "Treatments & Effects"}</div>
+              <div className="space-y-1.5 text-[13px] text-slate-700 font-medium w-full">
+                 {opts?.parameters?.map((a: any, i: number) => (
+                   <div key={i} className={cn("py-1.5 px-2.5 rounded-md border text-center flex items-center justify-center gap-2", a.isCorrect ? "bg-teal-50 border-teal-200 text-teal-800 font-semibold" : "bg-slate-50 border-slate-100 text-slate-500")}>
+                     {a.isCorrect && <Check className="w-3.5 h-3.5 shrink-0 text-teal-600" />}
+                     <span>{a.text || "—"}</span>
+                   </div>
+                 ))}
+              </div>
+           </div>
+        </div>
+      </div>
+    );
+  }
+  if (q.type === "next-gen-cloze") {
+    return (
+      <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
+        <div className="font-semibold text-primary mb-3">Fill in the Blank</div>
+        <div className="space-y-2">
+          {Object.entries(opts?.blanks || {}).map(([key, blank]: [string, any]) => (
+            <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-background border">
+              <div className="font-semibold text-teal-700 shrink-0 bg-teal-50 px-2.5 py-1 rounded-md text-xs uppercase tracking-wider">Blank {key}</div>
+              <div className="flex-1 text-slate-600 text-[13px]">
+                 Correct Answer: <span className="font-semibold text-slate-900 ml-1">{blank.correct}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return null;
 };
 
 function PreviousQuestions() {
@@ -401,80 +483,54 @@ function PreviousQuestions() {
           </DialogHeader>
           {previewQuestion && (
             <div className="mt-4">
-              <div 
-                className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
-                dangerouslySetInnerHTML={{ 
-                  __html: previewQuestion.type === "next-gen-cloze" 
-                    ? (previewQuestion.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
-                    : (previewQuestion.stem || "") 
-                }} 
-              />
-              <div className="space-y-2 mb-6">
-                {previewQuestion.type?.startsWith("mcq") ? previewQuestion.options?.map((o: any) => (
-                  <div key={o.letter} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", o.correct ? "border-success/40 bg-success/5" : "border-border")}>
-                    <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold shrink-0">{o.letter}</div>
-                    <span className="flex-1 break-words min-w-0">{o.text}</span>
-                    {o.correct && <Check className="ml-auto size-4 text-success-foreground" />}
-                  </div>
-                )) : previewQuestion.type === "bowtie" ? (
-                  <div className="rounded-xl border border-border p-5 text-sm bg-muted/10">
-                    <div className="font-semibold text-teal-800 mb-6 text-sm">Bow-Tie Correct Answers</div>
-                    <div className="flex flex-col md:flex-row items-stretch justify-center gap-4">
-                       <div className="flex-1 flex flex-col justify-start items-center bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 w-full text-center min-h-[120px]">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 mb-3">Actions to Take</div>
-                          <div className="space-y-1.5 text-[13px] text-slate-700 font-medium w-full">
-                             {previewQuestion.options?.actions?.map((a: any, i: number) => (
-                               <div key={i} className={cn("py-1.5 px-2.5 rounded-md border text-left flex items-start gap-2", a.isCorrect ? "bg-teal-50 border-teal-200 text-teal-800 font-semibold" : "bg-slate-50 border-slate-100 text-slate-500")}>
-                                 {a.isCorrect && <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" />}
-                                 <span className="flex-1">{a.text || "—"}</span>
-                               </div>
-                             ))}
-                          </div>
-                       </div>
-                       <div className="flex-1 flex flex-col justify-start items-center bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 w-full text-center min-h-[120px]">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 mb-3">Potential Condition</div>
-                          <div className="space-y-1.5 text-[13px] text-slate-700 font-medium w-full">
-                             {previewQuestion.options?.conditions?.map((a: any, i: number) => (
-                               <div key={i} className={cn("py-1.5 px-2.5 rounded-md border text-left flex items-start gap-2", a.isCorrect ? "bg-teal-50 border-teal-200 text-teal-800 font-semibold" : "bg-slate-50 border-slate-100 text-slate-500")}>
-                                 {a.isCorrect && <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" />}
-                                 <span className="flex-1">{a.text || "—"}</span>
-                               </div>
-                             ))}
-                          </div>
-                       </div>
-                       <div className="flex-1 flex flex-col justify-start items-center bg-white rounded-[2rem] border border-slate-200 shadow-sm p-6 w-full text-center min-h-[120px]">
-                          <div className="text-[11px] font-bold uppercase tracking-wider text-teal-700 mb-3">Parameters to Monitor</div>
-                          <div className="space-y-1.5 text-[13px] text-slate-700 font-medium w-full">
-                             {previewQuestion.options?.parameters?.map((a: any, i: number) => (
-                               <div key={i} className={cn("py-1.5 px-2.5 rounded-md border text-left flex items-start gap-2", a.isCorrect ? "bg-teal-50 border-teal-200 text-teal-800 font-semibold" : "bg-slate-50 border-slate-100 text-slate-500")}>
-                                 {a.isCorrect && <Check className="w-3.5 h-3.5 mt-0.5 shrink-0 text-teal-600" />}
-                                 <span className="flex-1">{a.text || "—"}</span>
-                               </div>
-                             ))}
-                          </div>
-                       </div>
+              {previewQuestion.group_type === "grouped" ? (
+                <div className="space-y-8">
+                  {previewQuestion.options?.subQuestions?.map((sq: any, i: number) => (
+                    <div key={i} className="border border-border rounded-2xl p-5 bg-card">
+                      <div className="font-bold text-teal-700 mb-4 pb-2 border-b">Sub-question {i + 1} ({formatQuestionType(sq.type)})</div>
+                      <div 
+                        className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
+                        dangerouslySetInnerHTML={{ 
+                          __html: sq.type === "next-gen-cloze" 
+                            ? (sq.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                            : (sq.stem || "") 
+                        }} 
+                      />
+                      <div className="space-y-2 mb-6">
+                        {renderOptionsPreview(sq)}
+                      </div>
+                      <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
+                        <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: sq.rationale || "" }} />
+                      </div>
                     </div>
-                  </div>
-                ) : previewQuestion.type === "next-gen-cloze" && (
-                  <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
-                    <div className="font-semibold text-primary mb-3">Fill in the Blank</div>
-                    <div className="space-y-2">
-                      {Object.entries(previewQuestion.options?.blanks || {}).map(([key, blank]: [string, any]) => (
-                        <div key={key} className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 rounded-lg bg-background border">
-                          <div className="font-semibold text-teal-700 shrink-0 bg-teal-50 px-2.5 py-1 rounded-md text-xs uppercase tracking-wider">Blank {key}</div>
-                          <div className="flex-1 text-slate-600 text-[13px]">
-                             Correct Answer: <span className="font-semibold text-slate-900 ml-1">{blank.correct}</span>
-                          </div>
-                        </div>
-                      ))}
+                  ))}
+                  {previewQuestion.rationale && (
+                    <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
+                      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overall Rationale</div>
+                      <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
                     </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div 
+                    className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
+                    dangerouslySetInnerHTML={{ 
+                      __html: previewQuestion.type === "next-gen-cloze" 
+                        ? (previewQuestion.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                        : (previewQuestion.stem || "") 
+                    }} 
+                  />
+                  <div className="space-y-2 mb-6">
+                    {renderOptionsPreview(previewQuestion)}
                   </div>
-                )}
-              </div>
-              <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
-                <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
-              </div>
+                  <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
+                    <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
+                    <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
+                  </div>
+                </>
+              )}
             </div>
           )}
         </DialogContent>

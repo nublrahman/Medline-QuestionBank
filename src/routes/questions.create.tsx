@@ -185,6 +185,7 @@ function CreateQuestion() {
   }>({ layout: "paragraph", tables: [{ id: `t-${Math.random().toString(36).substring(7)}`, tabName: "History and Physical", headers: { col1: "Body System", col2: "Findings" }, rows: [] }], sentences: [], correctHighlights: [] });
   const [activeHighlightTab, setActiveHighlightTab] = useState(0);
   const [rationale, setRationale] = useState("");
+  
   type ScenarioTab = {
     title: string;
     type?: "text" | "table";
@@ -192,6 +193,14 @@ function CreateQuestion() {
     tableHeaders?: string[];
     tableRows?: { id: string; cells: string[] }[];
   };
+  const [parentStem, setParentStem] = useState("");
+  const [parentTabs, setParentTabs] = useState<ScenarioTab[]>([
+    { title: "Patient Information", type: "text", content: "" },
+    { title: "Vitals", type: "text", content: "" },
+    { title: "Current Medications", type: "text", content: "" }
+  ]);
+  const [parentIncludeTabs, setParentIncludeTabs] = useState(false);
+  
   const [tabs, setTabs] = useState<ScenarioTab[]>([
     { title: "Patient Information", type: "text", content: "" },
     { title: "Vitals", type: "text", content: "" },
@@ -199,10 +208,10 @@ function CreateQuestion() {
   ]);
   const [includeTabs, setIncludeTabs] = useState(false);
 
-  const switchSubQuestion = (newIndex: number) => {
-    let updatedSubs = [...subQuestions];
+  const switchSubQuestion = (newIndex: number, overrideSubs?: any[]) => {
+    let updatedSubs = overrideSubs ? [...overrideSubs] : [...subQuestions];
     
-    if (activeSubIndex >= 0) {
+    if (activeSubIndex >= 0 && activeSubIndex < (overrideSubs ? overrideSubs.length - 1 : updatedSubs.length)) {
       updatedSubs[activeSubIndex] = {
         ...updatedSubs[activeSubIndex],
         type,
@@ -218,12 +227,16 @@ function CreateQuestion() {
         scenario_tabs: includeTabs ? tabs : [],
         include_tabs: includeTabs
       };
+    } else if (activeSubIndex === -1) {
+      setParentStem(stem);
+      setParentTabs(tabs);
+      setParentIncludeTabs(includeTabs);
     }
 
     if (newIndex >= 0) {
       let targetSub = updatedSubs[newIndex];
       if (!targetSub) {
-        targetSub = { id: Math.random().toString(36).substring(7) };
+        targetSub = { id: Math.random().toString(36).substring(7), type: "mcq-single" };
         updatedSubs[newIndex] = targetSub;
       }
 
@@ -254,6 +267,10 @@ function CreateQuestion() {
     } else {
       setSubQuestions(updatedSubs);
       setActiveSubIndex(newIndex);
+      setStem(parentStem);
+      setTabs(parentTabs);
+      setIncludeTabs(parentIncludeTabs);
+      setType("mcq-single");
     }
   };
 
@@ -316,6 +333,32 @@ function CreateQuestion() {
           }
           setMarking(qData.marking_scheme || "zero-one");
           setTimeEst(qData.time_est || 90);
+          
+          const pStem = qData.stem || "";
+          let pTabs = [
+            { title: "Patient Information", type: "text" as const, content: "" },
+            { title: "Vitals", type: "text" as const, content: "" },
+            { title: "Current Medications", type: "text" as const, content: "" }
+          ];
+          let pInclude = false;
+          if (qData.options?.scenario_tabs && qData.options.scenario_tabs.length > 0) {
+             pTabs = migrateScenarioTabs(qData.options.scenario_tabs);
+             pInclude = true;
+          }
+          setParentStem(pStem);
+          setParentTabs(pTabs);
+          setParentIncludeTabs(pInclude);
+          
+          if (qData.group_type === "grouped") {
+            setStem(pStem);
+            setTabs(pTabs);
+            setIncludeTabs(pInclude);
+            setActiveSubIndex(-1);
+          } else {
+            setStem(pStem);
+            setTabs(pTabs);
+            setIncludeTabs(pInclude);
+          }
         }
       } else {
         setCategory("");
@@ -356,14 +399,14 @@ function CreateQuestion() {
     loadData();
   }, [targetId]);
 
-  const handlePublish = async (status: "published" | "draft") => {
+  const validateItem = (item: any, prefix = ""): boolean => {
     const stripHtml = (html: string) => {
       const tmp = document.createElement("DIV");
       tmp.innerHTML = html;
       return tmp.textContent || tmp.innerText || "";
     };
 
-    const hasImage = (html: string) => html.includes("<img");
+    const hasImage = (html: string) => html?.includes("<img");
 
     const isEmpty = (html: string) => {
       if (!html) return true;
@@ -371,148 +414,189 @@ function CreateQuestion() {
       return stripHtml(html).trim() === "";
     };
 
-    if (group !== "grouped" && isEmpty(stem)) {
-      toast.error("Question stem cannot be blank.");
-      return;
+    if (isEmpty(item.stem)) {
+      toast.error(`${prefix}Question stem cannot be blank.`);
+      return false;
     }
-    
-    if (group !== "grouped") {
-      if (type.startsWith("mcq")) {
-        if (options.some((opt) => isEmpty(opt.text))) {
-          toast.error("All answer options must be filled.");
-          return;
-        }
-        const texts = options.map(o => o.text.trim().toLowerCase());
-        if (new Set(texts).size !== texts.length) {
-          toast.error("Duplicate answer options are not allowed.");
-          return;
-        }
-      } else if (type === "bowtie") {
-        const actions = bowtieConfig.actions?.filter((a: any) => !isEmpty(a.text)) || [];
-        const conditions = bowtieConfig.conditions?.filter((c: any) => !isEmpty(c.text)) || [];
-        const parameters = bowtieConfig.parameters?.filter((p: any) => !isEmpty(p.text)) || [];
-        
-        const allTexts = [...actions, ...conditions, ...parameters].map(x => x.text.trim().toLowerCase());
-        if (new Set(allTexts).size !== allTexts.length) {
-          toast.error("Duplicate options are not allowed across Bow-Tie columns.");
-          return;
-        }
 
-        if (actions.length < 2 || conditions.length < 1 || parameters.length < 2) {
-          toast.error("Please fill in at least 2 Causes/Treatments and 1 Core Condition.");
-          return;
+    if (item.type.startsWith("mcq")) {
+      if (item.options?.some((opt: any) => isEmpty(opt.text))) {
+        toast.error(`${prefix}All answer options must be filled.`);
+        return false;
+      }
+      const texts = item.options?.map((o: any) => o.text.trim().toLowerCase()) || [];
+      if (new Set(texts).size !== texts.length) {
+        toast.error(`${prefix}Duplicate answer options are not allowed.`);
+        return false;
+      }
+      if (!item.options?.some((opt: any) => opt.correct)) {
+        toast.error(`${prefix}Please mark at least one correct answer.`);
+        return false;
+      }
+    } else if (item.type === "bowtie") {
+      const actions = item.bowtieConfig?.actions?.filter((a: any) => !isEmpty(a.text)) || [];
+      const conditions = item.bowtieConfig?.conditions?.filter((c: any) => !isEmpty(c.text)) || [];
+      const parameters = item.bowtieConfig?.parameters?.filter((p: any) => !isEmpty(p.text)) || [];
+      
+      const allTexts = [...actions, ...conditions, ...parameters].map(x => x.text.trim().toLowerCase());
+      if (new Set(allTexts).size !== allTexts.length) {
+        toast.error(`${prefix}Duplicate options are not allowed across Bow-Tie columns.`);
+        return false;
+      }
+
+      if (actions.length < 2 || conditions.length < 1 || parameters.length < 2) {
+        toast.error(`${prefix}Please fill in at least 2 Causes/Treatments and 1 Core Condition.`);
+        return false;
+      }
+      const correctConditions = conditions.filter((c: any) => c.isCorrect);
+      if (correctConditions.length !== 1) {
+        toast.error(`${prefix}There must be exactly 1 correct Potential Condition (cannot be empty).`);
+        return false;
+      }
+      if (!actions.some((a: any) => a.isCorrect) || !parameters.some((p: any) => p.isCorrect)) {
+        toast.error(`${prefix}Please mark at least one correct Action and one correct Parameter (cannot be empty).`);
+        return false;
+      }
+    } else if (item.type === "table") {
+      const rows = item.tableConfig?.rows?.filter((r: any) => !isEmpty(r.text)) || [];
+      const columns = item.tableConfig?.columns?.filter((c: any) => !isEmpty(c.label)) || [];
+      if (rows.length === 0 || columns.length === 0) {
+        toast.error(`${prefix}Table requires at least one row and one column.`);
+        return false;
+      }
+      if (Object.keys(item.tableConfig?.correctAnswers || {}).length !== rows.length) {
+        toast.error(`${prefix}Please provide a correct answer for every row in the table.`);
+        return false;
+      }
+    } else if (item.type === "next-gen-cloze") {
+      const match = item.stem?.match(/{(?:dropdown\s+)?[0-9]+}/g);
+      if (!match) {
+        toast.error(`${prefix}You must have at least one blank placeholder (e.g. {dropdown 1}) in the stem.`);
+        return false;
+      }
+      
+      const blankIds = match.map((m: string) => m.replace(/[^0-9]/g, ''));
+      for (const id of blankIds) {
+        const blank = item.clozeBlanks?.[id];
+        if (!blank) {
+          toast.error(`${prefix}Dropdown {${id}} is in the text but missing from configuration.`);
+          return false;
         }
-        const correctConditions = conditions.filter((c: any) => c.isCorrect);
-        if (correctConditions.length !== 1) {
-          toast.error("There must be exactly 1 correct Potential Condition (cannot be empty).");
-          return;
+        if (blank.options?.some((o: string) => !o.trim())) {
+          toast.error(`${prefix}Dropdown {${id}} has empty options.`);
+          return false;
         }
-        if (!actions.some((a: any) => a.isCorrect) || !parameters.some((p: any) => p.isCorrect)) {
-          toast.error("Please mark at least one correct Action and one correct Parameter (cannot be empty).");
-          return;
+        const texts = blank.options?.map((o: string) => o.trim().toLowerCase()) || [];
+        if (new Set(texts).size !== texts.length) {
+          toast.error(`${prefix}Dropdown {${id}} contains duplicate options.`);
+          return false;
         }
-      } else if (type === "table") {
-        const rows = tableConfig.rows?.filter((r: any) => !isEmpty(r.text)) || [];
-        const columns = tableConfig.columns?.filter((c: any) => !isEmpty(c.label)) || [];
-        if (rows.length === 0 || columns.length === 0) {
-          toast.error("Table requires at least one row and one column.");
-          return;
-        }
-        if (Object.keys(tableConfig.correctAnswers).length !== rows.length) {
-          toast.error("Please provide a correct answer for every row in the table.");
-          return;
-        }
-      } else if (type === "next-gen-cloze") {
-        const match = stem.match(/{(?:dropdown\s+)?[0-9]+}/g);
-        if (!match) {
-          toast.error("You must have at least one blank placeholder (e.g. {dropdown 1}) in the stem.");
-          return;
-        }
-        
-        const blankIds = match.map(m => m.replace(/[^0-9]/g, ''));
-        for (const id of blankIds) {
-          const blank = clozeBlanks[id];
-          if (!blank) {
-            toast.error(`Dropdown {${id}} is in the text but missing from configuration.`);
-            return;
-          }
-          if (blank.options.some(o => !o.trim())) {
-            toast.error(`Dropdown {${id}} has empty options.`);
-            return;
-          }
-          const texts = blank.options.map(o => o.trim().toLowerCase());
-          if (new Set(texts).size !== texts.length) {
-            toast.error(`Dropdown {${id}} contains duplicate options.`);
-            return;
-          }
-          if (!blank.correct) {
-            toast.error(`Please select a correct answer for dropdown {${id}}.`);
-            return;
-          }
-        }
-        if (clozeDependencies && clozeDependencies.length > 0) {
-          for (const dep of clozeDependencies) {
-            if (!dep.sourceBlankId || !dep.targetBlankId) {
-              toast.error("Please select a source and target blank for all dependency rules.");
-              return;
-            }
-            if (dep.sourceBlankId === dep.targetBlankId) {
-              toast.error(`Dropdown {${dep.sourceBlankId}} cannot depend on itself.`);
-              return;
-            }
-            if (Object.keys(dep.mapping).length === 0) {
-              toast.error(`Please map at least one option for the dependency between Dropdown {${dep.sourceBlankId}} and Dropdown {${dep.targetBlankId}}.`);
-              return;
-            }
-          }
-        }
-      } else if (type === "next-gen-highlight") {
-        if (highlightConfig.layout === "table") {
-          if (!highlightConfig.tables || highlightConfig.tables.length === 0) {
-            toast.error("You must add at least one table tab.");
-            return;
-          }
-          for (const table of highlightConfig.tables) {
-            if (isEmpty(table.tabName)) {
-              toast.error("Table tab names cannot be empty.");
-              return;
-            }
-            if (!table.rows || table.rows.length === 0) {
-              toast.error(`You must add at least one row to table tab: ${table.tabName}`);
-              return;
-            }
-            if (table.rows.some(r => isEmpty(r.label) || r.sentences.some(s => isEmpty(s.text)))) {
-              toast.error(`Table rows and sentences cannot be empty in tab: ${table.tabName}`);
-              return;
-            }
-          }
-        } else {
-          if (!highlightConfig.sentences || highlightConfig.sentences.length === 0) {
-            toast.error("You must add at least one sentence to highlight.");
-            return;
-          }
-          if (highlightConfig.sentences.some(s => isEmpty(s.text))) {
-            toast.error("Highlight sentences cannot be empty.");
-            return;
-          }
-        }
-        if (!highlightConfig.correctHighlights || highlightConfig.correctHighlights.length === 0) {
-          toast.error("You must select at least one correct sentence to highlight.");
-          return;
+        if (!blank.correct) {
+          toast.error(`${prefix}Please select a correct answer for dropdown {${id}}.`);
+          return false;
         }
       }
+      if (item.clozeDependencies && item.clozeDependencies.length > 0) {
+        for (const dep of item.clozeDependencies) {
+          if (!dep.sourceBlankId || !dep.targetBlankId) {
+            toast.error(`${prefix}Please select a source and target blank for all dependency rules.`);
+            return false;
+          }
+          if (dep.sourceBlankId === dep.targetBlankId) {
+            toast.error(`${prefix}Dropdown {${dep.sourceBlankId}} cannot depend on itself.`);
+            return false;
+          }
+          if (Object.keys(dep.mapping || {}).length === 0) {
+            toast.error(`${prefix}Please map at least one option for the dependency between Dropdown {${dep.sourceBlankId}} and Dropdown {${dep.targetBlankId}}.`);
+            return false;
+          }
+        }
+      }
+    } else if (item.type === "next-gen-highlight") {
+      if (item.highlightConfig?.layout === "table") {
+        if (!item.highlightConfig.tables || item.highlightConfig.tables.length === 0) {
+          toast.error(`${prefix}You must add at least one table tab.`);
+          return false;
+        }
+        for (const table of item.highlightConfig.tables) {
+          const isEmptyString = (str: string) => (!str || str.trim() === "");
+          if (isEmptyString(table.tabName)) {
+            toast.error(`${prefix}Table tab names cannot be empty.`);
+            return false;
+          }
+          if (!table.rows || table.rows.length === 0) {
+            toast.error(`${prefix}You must add at least one row to table tab: ${table.tabName}`);
+            return false;
+          }
+          if (table.rows.some((r: any) => isEmptyString(r.label) || r.sentences?.some((s: any) => isEmptyString(s.text)))) {
+            toast.error(`${prefix}Table rows and sentences cannot be empty in tab: ${table.tabName}`);
+            return false;
+          }
+        }
+      } else {
+        if (!item.highlightConfig?.sentences || item.highlightConfig.sentences.filter((s: any) => s.isClickable !== false).length === 0) {
+          toast.error(`${prefix}You must add at least one clickable phrase to highlight using brackets [].`);
+          return false;
+        }
+        const isEmptyString = (str: string) => (!str || str.trim() === "");
+        if (item.highlightConfig.sentences.filter((s: any) => s.isClickable !== false).some((s: any) => isEmptyString(s.text))) {
+          toast.error(`${prefix}Highlight phrases cannot be empty.`);
+          return false;
+        }
+      }
+      if (!item.highlightConfig?.correctHighlights || item.highlightConfig.correctHighlights.length === 0) {
+        toast.error(`${prefix}You must select at least one correct sentence to highlight.`);
+        return false;
+      }
+    }
+    
+    if (isEmpty(item.rationale)) {
+      toast.error(`${prefix}Rationale cannot be blank.`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const handlePublish = async (status: "published" | "draft") => {
+    let itemsToValidate = [];
+    if (group === "grouped") {
+      const currentSubs = [...subQuestions];
+      if (activeSubIndex >= 0 && currentSubs[activeSubIndex]) {
+        currentSubs[activeSubIndex] = {
+          ...currentSubs[activeSubIndex],
+          type, stem, options, bowtieConfig, tableConfig, clozeBlanks, clozeDependencies, highlightConfig, rationale
+        };
+      }
+      itemsToValidate = currentSubs;
+      if (itemsToValidate.length === 0) {
+         toast.error("Grouped questions must have at least one item.");
+         return;
+      }
+      const stripHtml = (html: string) => { const tmp = document.createElement("DIV"); tmp.innerHTML = html; return tmp.textContent || tmp.innerText || ""; };
+      const hasImage = (html: string) => html?.includes("<img");
+      const isEmpty = (html: string) => { if (!html) return true; if (hasImage(html)) return false; return stripHtml(html).trim() === ""; };
+      
+      const currentParentStem = activeSubIndex === -1 ? stem : parentStem;
+      if (isEmpty(currentParentStem)) {
+        toast.error("Common Case Scenario cannot be blank.");
+        return;
+      }
+    } else {
+      itemsToValidate = [{ type, stem, options, bowtieConfig, tableConfig, clozeBlanks, clozeDependencies, highlightConfig, rationale }];
     }
 
-    if (isEmpty(rationale)) {
-      toast.error("Rationale cannot be blank.");
-      return;
+    for (let i = 0; i < itemsToValidate.length; i++) {
+       const prefix = group === "grouped" ? `Item ${i + 1}: ` : "";
+       if (!validateItem(itemsToValidate[i], prefix)) {
+          return;
+       }
     }
 
     setIsPublishing(true);
     try {
       let finalOptions: any = null;
       if (group === "grouped") {
-        // Sync current sub-question before saving
         const currentSubs = [...subQuestions];
         if (activeSubIndex >= 0 && currentSubs[activeSubIndex]) {
           currentSubs[activeSubIndex] = {
@@ -530,15 +614,22 @@ function CreateQuestion() {
             scenario_tabs: includeTabs ? tabs : [],
             include_tabs: includeTabs
           };
+        } else if (activeSubIndex === -1) {
+          setParentStem(stem);
+          setParentTabs(tabs);
+          setParentIncludeTabs(includeTabs);
         }
         finalOptions = { subQuestions: currentSubs };
+        if (activeSubIndex === -1 ? includeTabs : parentIncludeTabs) {
+          finalOptions.scenario_tabs = activeSubIndex === -1 ? tabs : parentTabs;
+        }
       } else if (type === "bowtie") finalOptions = bowtieConfig;
       else if (type === "table") finalOptions = tableConfig;
       else if (type === "next-gen-cloze") finalOptions = { blanks: clozeBlanks, clozeDependencies };
       else if (type === "next-gen-highlight") finalOptions = highlightConfig;
       else if (type.startsWith("mcq")) finalOptions = options;
 
-      if (includeTabs) {
+      if (group !== "grouped" && includeTabs) {
         if (Array.isArray(finalOptions)) {
           finalOptions = { mcq_options: finalOptions, scenario_tabs: tabs };
         } else if (finalOptions) {
@@ -553,7 +644,7 @@ function CreateQuestion() {
         category,
         subcategory,
         difficulty,
-        stem: group === "grouped" ? "" : stem,
+        stem: group === "grouped" ? (activeSubIndex === -1 ? stem : parentStem) : stem,
         options: finalOptions,
         rationale,
         group_type: group,
@@ -583,6 +674,24 @@ function CreateQuestion() {
 
   if (loading) return <AdminLayout title="Loading..."><div className="p-8">Loading...</div></AdminLayout>;
 
+  const handleTypeChange = (newType: string) => {
+    if (newType === 'mcq-single' && type === 'mcq-multi') {
+      let foundCorrect = false;
+      const newOptions = options.map(opt => {
+        if (opt.correct) {
+          if (!foundCorrect) {
+            foundCorrect = true;
+            return opt;
+          }
+          return { ...opt, correct: false };
+        }
+        return opt;
+      });
+      setOptions(newOptions);
+    }
+    setType(newType);
+  };
+
   return (
     <AdminLayout
       title={editId ? "Edit Question" : duplicateId ? "Duplicate Question" : "Question Management"}
@@ -611,7 +720,7 @@ function CreateQuestion() {
                   >
                     <div className="grid grid-cols-2 gap-2 rounded-xl bg-muted p-1">
                       <SegBtn active={group === "ungrouped"} onClick={() => setGroup("ungrouped")}>Ungrouped</SegBtn>
-                      <SegBtn active={group === "grouped"} onClick={() => { setGroup("grouped"); if (activeSubIndex === -1) switchSubQuestion(0); }}>Grouped</SegBtn>
+                      <SegBtn active={group === "grouped"} onClick={() => { setGroup("grouped"); switchSubQuestion(0); }}>Grouped</SegBtn>
                     </div>
                   </Field>
                   <Field 
@@ -669,7 +778,7 @@ function CreateQuestion() {
                           key={t.id} 
                           active={type === t.id} 
                           disabled={!!editId && !type.startsWith("mcq")} 
-                          onClick={() => setType(t.id)}
+                          onClick={() => handleTypeChange(t.id)}
                         >
                           {t.name}
                         </Pill>
@@ -686,7 +795,7 @@ function CreateQuestion() {
                             key={t.id} 
                             active={type === t.id} 
                             disabled={!!editId}
-                            onClick={() => { if (isEnabled) setType(t.id); }}
+                            onClick={() => { if (isEnabled) handleTypeChange(t.id); }}
                           >
                             <span className={cn(!isEnabled && "opacity-50 pointer-events-none")}>{t.name}</span>
                           </Pill>
@@ -705,8 +814,20 @@ function CreateQuestion() {
           {step === 2 && (
             <>
               {group === "grouped" && (
-                <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-4 border-b border-border mt-8">
-                  {subQuestions.map((_, idx) => (
+                <>
+                  <Section title="Common Case Scenario" desc="This stem applies to all items in this group.">
+                    <RichTextEditor value={parentStem} onChange={setParentStem} />
+                  </Section>
+                  
+                  <ScenarioTabsEditor 
+                    includeTabs={parentIncludeTabs} 
+                    setIncludeTabs={setParentIncludeTabs} 
+                    tabs={parentTabs} 
+                    setTabs={setParentTabs} 
+                  />
+
+                  <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-4 border-b border-border mt-8">
+                    {subQuestions.map((_, idx) => (
                     <button
                       key={idx}
                       onClick={() => switchSubQuestion(idx)}
@@ -728,21 +849,22 @@ function CreateQuestion() {
                   >
                     <Plus className="size-4" /> Add Item
                   </button>
-                </div>
+                  </div>
+                </>
               )}
 
 
               
-              {(group === "ungrouped" || activeSubIndex >= 0) && (
+              {(group === "ungrouped" || (group === "grouped" && activeSubIndex >= 0)) && (
                 <>
-                  {group === "grouped" && (
+                  {group === "grouped" && activeSubIndex >= 0 && (
                     <Section title="Question Type" desc="Select format for this sub-question.">
                       <div className="space-y-4">
                         <div>
                           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-secondary px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-secondary-foreground">Traditional</div>
                           <div className="flex flex-wrap gap-2">
                             {questionTypes.traditional.map((t) => (
-                              <Pill key={t.id} active={type === t.id} onClick={() => setType(t.id)}>{t.name}</Pill>
+                              <Pill key={t.id} active={type === t.id} onClick={() => handleTypeChange(t.id)}>{t.name}</Pill>
                             ))}
                           </div>
                         </div>
@@ -752,7 +874,7 @@ function CreateQuestion() {
                             {questionTypes.ngn.map((t) => {
                               const isEnabled = t.id === "bowtie" || t.id === "next-gen-cloze" || t.id === "table" || t.id === "next-gen-highlight";
                               return (
-                                <Pill key={t.id} active={type === t.id} onClick={() => { if (isEnabled) setType(t.id); }}>
+                                <Pill key={t.id} active={type === t.id} onClick={() => { if (isEnabled) handleTypeChange(t.id); }}>
                                   <span className={cn(!isEnabled && "opacity-50 pointer-events-none")}>{t.name}</span>
                                 </Pill>
                               );
@@ -762,7 +884,7 @@ function CreateQuestion() {
                       </div>
                     </Section>
                   )}
-                  <Section title="Question Stem">
+                  <Section title={group === "grouped" ? "Question Stem (Item Specific)" : "Question Stem"}>
                 <RichTextEditor
                   value={stem}
                   onChange={(val) => {
@@ -1435,38 +1557,55 @@ function CreateQuestion() {
                             <label className="text-sm font-semibold text-foreground">Select Correct Highlights (Across all tabs)</label>
                             <p className="text-xs text-muted-foreground">Click the findings below that the student should highlight. You can select findings from any tab.</p>
                             
-                            {highlightConfig.tables.map(table => table.rows.some(r => r.sentences.length > 0) && (
-                              <div key={table.id} className="mt-4">
-                                <div className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">{table.tabName || "Unnamed Tab"}</div>
-                                <div className="rounded-xl border border-border overflow-hidden">
-                                  <table className="w-full text-left text-[14px]">
-                                    <thead className="bg-muted/50 text-muted-foreground">
+                            <div className="mt-4">
+                              <div className="flex border-b border-border gap-1 overflow-x-auto">
+                                {highlightConfig.tables.map((t: any, idx: number) => (
+                                  <button
+                                    key={t.id}
+                                    type="button"
+                                    onClick={(e) => { e.preventDefault(); setActiveHighlightTab(idx); }}
+                                    className={cn(
+                                      "px-5 py-2.5 text-[13px] font-bold rounded-t-md relative z-10 transition-colors border border-b-0",
+                                      activeHighlightTab === idx
+                                        ? "text-foreground bg-card border-border -mb-[1px]"
+                                        : "text-muted-foreground bg-muted/30 border-transparent hover:bg-muted"
+                                    )}
+                                  >
+                                    {t.tabName || "Unnamed Tab"}
+                                  </button>
+                                ))}
+                              </div>
+                              
+                              {highlightConfig.tables[activeHighlightTab] && (
+                                <div className="overflow-x-auto border border-border bg-card">
+                                  <table className="w-full text-left text-[13px]">
+                                    <thead className="bg-[#eaf3fa] text-slate-900 border-b border-border">
                                       <tr>
-                                        <th className="p-3 font-semibold w-1/3">{table.headers?.col1 || "Body System"}</th>
-                                        <th className="p-3 font-semibold">{table.headers?.col2 || "Findings"}</th>
+                                        <th className="p-4 font-bold w-[30%]">{highlightConfig.tables[activeHighlightTab].headers?.col1 || "Body System"}</th>
+                                        <th className="p-4 font-bold">{highlightConfig.tables[activeHighlightTab].headers?.col2 || "Findings"}</th>
                                       </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-border bg-card">
-                                      {table.rows.map(row => (
-                                        <tr key={row.id}>
-                                          <td className="p-3 font-medium text-foreground">{row.label}</td>
-                                          <td className="p-3 leading-relaxed">
-                                            {row.sentences.map((sentence, i) => {
-                                              const isCorrect = (highlightConfig.correctHighlights || []).includes(sentence.id);
+                                    <tbody className="divide-y divide-border">
+                                      {highlightConfig.tables[activeHighlightTab].rows?.map((row: any, rIndex: number) => (
+                                        <tr key={row.id} className={rIndex % 2 === 0 ? "bg-slate-50/70" : "bg-card"}>
+                                          <td className="p-4 font-bold text-slate-800 align-top">{row.label}</td>
+                                          <td className="p-4 leading-relaxed align-top">
+                                            {row.sentences?.map((s: any, i: number) => {
+                                              const isCorrect = (highlightConfig.correctHighlights || []).includes(s.id);
                                               return (
-                                                <span key={sentence.id}>
+                                                <span key={s.id}>
                                                   <span
                                                     onClick={() => {
                                                       const current = highlightConfig.correctHighlights || [];
-                                                      const newC = isCorrect ? current.filter(id => id !== sentence.id) : [...current, sentence.id];
+                                                      const newC = isCorrect ? current.filter((id: string) => id !== s.id) : [...current, s.id];
                                                       setHighlightConfig({...highlightConfig, correctHighlights: newC});
                                                     }}
                                                     className={cn(
-                                                      "px-1 py-0.5 rounded cursor-pointer transition-colors",
-                                                      isCorrect ? "bg-success/20 text-success-foreground border-b-2 border-success font-semibold" : "hover:bg-muted"
+                                                      "transition-all rounded-sm py-0.5 cursor-pointer",
+                                                      isCorrect ? "bg-success/30 border-b-2 border-success font-semibold" : "bg-transparent hover:bg-yellow-100"
                                                     )}
                                                   >
-                                                    {sentence.text || "[Empty]"}
+                                                    {s.text || "[Empty]"}
                                                   </span>
                                                   {i < row.sentences.length - 1 && " "}
                                                 </span>
@@ -1478,8 +1617,8 @@ function CreateQuestion() {
                                     </tbody>
                                   </table>
                                 </div>
-                              </div>
-                            ))}
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -1487,68 +1626,308 @@ function CreateQuestion() {
                       <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
                         <div className="space-y-2">
                           <div className="flex items-center justify-between">
-                            <label className="text-sm font-semibold text-foreground">Sentences</label>
-                            <button
-                              onClick={() => setHighlightConfig({...highlightConfig, sentences: [...(highlightConfig.sentences || []), { id: `s-${Math.random().toString(36).substring(7)}`, text: "" }]})}
-                              className="text-xs font-semibold text-primary hover:underline flex items-center gap-1"
-                            >
-                              <Plus className="size-3" /> Add Sentence
-                            </button>
+                            <label className="text-sm font-semibold text-foreground">Paragraph Text</label>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  const ta = document.getElementById("paragraph-editor") as HTMLTextAreaElement;
+                                  if (!ta) return;
+                                  const start = ta.selectionStart;
+                                  const end = ta.selectionEnd;
+                                  if (start === end) {
+                                     toast.error("Please select some text first.");
+                                     return;
+                                  }
+                                  const text = highlightConfig.paragraphText || "";
+                                  const selected = text.substring(start, end);
+                                  const newText = text.substring(0, start) + `[${selected}]` + text.substring(end);
+                                  
+                                  const e = { target: { value: newText } } as any;
+                                  document.getElementById("paragraph-editor")?.dispatchEvent(new Event('input', { bubbles: true }));
+                                  
+                                  const parseRes = (() => {
+                                    let parsedSentences: any[] = [];
+                                    let parsedCorrect: string[] = [];
+                                    const bracketRegex = /\[(.*?)\]/g;
+                                    let lastIndex = 0;
+                                    let match;
+                                    let clickIndex = 0;
+                                    
+                                    const processPlain = (plain: string) => {
+                                      if (!plain) return;
+                                      const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
+                                      let pLast = 0;
+                                      let pMatch;
+                                      while ((pMatch = splitRegex.exec(plain)) !== null) {
+                                        if (pMatch.index > pLast) {
+                                          const prePre = plain.substring(pLast, pMatch.index);
+                                          if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
+                                          else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
+                                        }
+                                        parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
+                                        if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
+                                        pLast = splitRegex.lastIndex;
+                                      }
+                                      if (pLast < plain.length) {
+                                        const leftover = plain.substring(pLast);
+                                        if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
+                                        else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
+                                      }
+                                    };
+                                    
+                                    while ((match = bracketRegex.exec(newText)) !== null) {
+                                      if (match.index > lastIndex) {
+                                        processPlain(newText.substring(lastIndex, match.index));
+                                      }
+                                      let innerText = match[1];
+                                      let isC = false;
+                                      if (innerText.startsWith("*")) { isC = true; innerText = innerText.substring(1); }
+                                      const clickId = `click-${clickIndex++}`;
+                                      parsedSentences.push({ id: clickId, text: innerText, isClickable: true });
+                                      if (isC) parsedCorrect.push(clickId);
+                                      lastIndex = bracketRegex.lastIndex;
+                                    }
+                                    if (lastIndex < newText.length) {
+                                      processPlain(newText.substring(lastIndex));
+                                    }
+                                    return { sentences: parsedSentences, correctHighlights: parsedCorrect };
+                                  })();
+                                  
+                                  setHighlightConfig({ ...highlightConfig, paragraphText: newText, sentences: parseRes.sentences, correctHighlights: parseRes.correctHighlights });
+                                }}
+                                className="text-xs font-semibold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-md"
+                              >
+                                [ ] Make Clickable
+                              </button>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  const ta = document.getElementById("paragraph-editor") as HTMLTextAreaElement;
+                                  if (!ta) return;
+                                  const start = ta.selectionStart;
+                                  const end = ta.selectionEnd;
+                                  if (start === end) {
+                                     toast.error("Please select some text first.");
+                                     return;
+                                  }
+                                  const text = highlightConfig.paragraphText || "";
+                                  const selected = text.substring(start, end);
+                                  const newText = text.substring(0, start) + `[*${selected}]` + text.substring(end);
+                                  
+                                  const parseRes = (() => {
+                                    let parsedSentences: any[] = [];
+                                    let parsedCorrect: string[] = [];
+                                    const bracketRegex = /\[(.*?)\]/g;
+                                    let lastIndex = 0;
+                                    let match;
+                                    let clickIndex = 0;
+                                    
+                                    const processPlain = (plain: string) => {
+                                      if (!plain) return;
+                                      const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
+                                      let pLast = 0;
+                                      let pMatch;
+                                      while ((pMatch = splitRegex.exec(plain)) !== null) {
+                                        if (pMatch.index > pLast) {
+                                          const prePre = plain.substring(pLast, pMatch.index);
+                                          if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
+                                          else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
+                                        }
+                                        parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
+                                        if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
+                                        pLast = splitRegex.lastIndex;
+                                      }
+                                      if (pLast < plain.length) {
+                                        const leftover = plain.substring(pLast);
+                                        if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
+                                        else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
+                                      }
+                                    };
+                                    
+                                    while ((match = bracketRegex.exec(newText)) !== null) {
+                                      if (match.index > lastIndex) {
+                                        processPlain(newText.substring(lastIndex, match.index));
+                                      }
+                                      let innerText = match[1];
+                                      let isC = false;
+                                      if (innerText.startsWith("*")) { isC = true; innerText = innerText.substring(1); }
+                                      const clickId = `click-${clickIndex++}`;
+                                      parsedSentences.push({ id: clickId, text: innerText, isClickable: true });
+                                      if (isC) parsedCorrect.push(clickId);
+                                      lastIndex = bracketRegex.lastIndex;
+                                    }
+                                    if (lastIndex < newText.length) {
+                                      processPlain(newText.substring(lastIndex));
+                                    }
+                                    return { sentences: parsedSentences, correctHighlights: parsedCorrect };
+                                  })();
+                                  
+                                  setHighlightConfig({ ...highlightConfig, paragraphText: newText, sentences: parseRes.sentences, correctHighlights: parseRes.correctHighlights });
+                                }}
+                                className="text-xs font-semibold text-success hover:underline flex items-center gap-1 bg-success/10 px-2 py-1 rounded-md"
+                              >
+                                [*] Mark Correct
+                              </button>
+                            </div>
                           </div>
-                          <div className="space-y-3 bg-muted/20 p-4 rounded-xl border border-border">
-                            {highlightConfig.sentences?.map((sentence, i) => (
-                              <div key={sentence.id} className="flex gap-2">
-                                <input
-                                  value={sentence.text}
-                                  onChange={(e) => {
-                                    const newS = [...highlightConfig.sentences];
-                                    newS[i].text = e.target.value;
-                                    setHighlightConfig({...highlightConfig, sentences: newS});
-                                  }}
-                                  placeholder="e.g. The patient reported a pain level of 8/10."
-                                  className="flex-1 rounded-lg border border-border px-3 py-2 text-sm bg-background"
-                                />
-                                <button
-                                  onClick={() => {
-                                    const newS = highlightConfig.sentences.filter(s => s.id !== sentence.id);
-                                    const newC = (highlightConfig.correctHighlights || []).filter(id => id !== sentence.id);
-                                    setHighlightConfig({...highlightConfig, sentences: newS, correctHighlights: newC});
-                                  }}
-                                  className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
-                                >
-                                  <Trash2 className="size-4" />
-                                </button>
-                              </div>
-                            ))}
-                            {(!highlightConfig.sentences || highlightConfig.sentences.length === 0) && (
-                              <div className="text-center text-sm text-muted-foreground py-4 border border-dashed border-border rounded-xl bg-background">No sentences added.</div>
-                            )}
-                          </div>
+                          <p className="text-xs text-muted-foreground">Type your paragraph below. Select any text and click the buttons above to mark it as a clickable phrase or the correct answer.</p>
+                          <textarea
+                            id="paragraph-editor"
+                            value={highlightConfig.paragraphText || ""}
+                            onChange={(e) => {
+                              const text = e.target.value;
+                              
+                              let parsedSentences: any[] = [];
+                              let parsedCorrect: string[] = [];
+                              const bracketRegex = /\[(.*?)\]/g;
+                              let lastIndex = 0;
+                              let match;
+                              let clickIndex = 0;
+                              
+                              const processPlain = (plain: string) => {
+                                if (!plain) return;
+                                const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
+                                let pLast = 0;
+                                let pMatch;
+                                while ((pMatch = splitRegex.exec(plain)) !== null) {
+                                  if (pMatch.index > pLast) {
+                                    const prePre = plain.substring(pLast, pMatch.index);
+                                    if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
+                                    else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
+                                  }
+                                  parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
+                                  if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
+                                  pLast = splitRegex.lastIndex;
+                                }
+                                if (pLast < plain.length) {
+                                  const leftover = plain.substring(pLast);
+                                  if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
+                                  else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
+                                }
+                              };
+                              
+                              while ((match = bracketRegex.exec(text)) !== null) {
+                                if (match.index > lastIndex) {
+                                  processPlain(text.substring(lastIndex, match.index));
+                                }
+                                let innerText = match[1];
+                                let isC = false;
+                                if (innerText.startsWith("*")) { isC = true; innerText = innerText.substring(1); }
+                                const clickId = `click-${clickIndex++}`;
+                                parsedSentences.push({ id: clickId, text: innerText, isClickable: true });
+                                if (isC) parsedCorrect.push(clickId);
+                                lastIndex = bracketRegex.lastIndex;
+                              }
+                              if (lastIndex < text.length) {
+                                processPlain(text.substring(lastIndex));
+                              }
+                              
+                              const finalCorrect = parsedCorrect.length > 0 
+                                ? parsedCorrect 
+                                : (highlightConfig.correctHighlights || []).filter((id: string) => parsedSentences.some(s => s.id === id));
+                              
+                              setHighlightConfig({
+                                ...highlightConfig, 
+                                paragraphText: text,
+                                sentences: parsedSentences,
+                                correctHighlights: finalCorrect
+                              });
+                            }}
+                            placeholder="e.g. The patient presented with [*severe headache] and [nausea]."
+                            className="w-full min-h-[150px] rounded-lg border border-border p-3 text-sm bg-background resize-y outline-none focus:border-primary"
+                          />
                         </div>
-                        {highlightConfig.sentences && highlightConfig.sentences.length > 0 && (
+
+                        {highlightConfig.sentences && highlightConfig.sentences.filter((s: any) => s.isClickable).length > 0 ? (
                           <div className="space-y-2 pt-4 border-t border-border">
                             <label className="text-sm font-semibold text-foreground">Select Correct Highlights</label>
-                            <p className="text-xs text-muted-foreground">Click the sentences below that the student should highlight.</p>
+                            <p className="text-xs text-muted-foreground">You can also click the phrases below to toggle their correct state in the text above.</p>
                             <div className="bg-card p-4 rounded-xl border border-border leading-relaxed text-[14px]">
-                              {highlightConfig.sentences.map(sentence => {
+                              {highlightConfig.sentences.map((sentence: any) => {
+                                if (!sentence.isClickable) {
+                                  return <span key={sentence.id}>{sentence.text}</span>;
+                                }
                                 const isCorrect = (highlightConfig.correctHighlights || []).includes(sentence.id);
                                 return (
                                   <span
                                     key={sentence.id}
                                     onClick={() => {
                                       const current = highlightConfig.correctHighlights || [];
-                                      const newC = isCorrect ? current.filter(id => id !== sentence.id) : [...current, sentence.id];
-                                      setHighlightConfig({...highlightConfig, correctHighlights: newC});
+                                      const newC = isCorrect ? current.filter((id: string) => id !== sentence.id) : [...current, sentence.id];
+                                      
+                                      const newText = highlightConfig.sentences.map((s: any) => {
+                                         if (!s.isClickable) return s.text;
+                                         if (newC.includes(s.id)) return `[*${s.text}]`;
+                                         return `[${s.text}]`;
+                                      }).join("");
+                                      
+                                      let parsedSentences: any[] = [];
+                                      let parsedCorrect: string[] = [];
+                                      const bracketRegex = /\[(.*?)\]/g;
+                                      let lastIndex = 0;
+                                      let match;
+                                      let clickIndex = 0;
+                                      
+                                      const processPlain = (plain: string) => {
+                                        if (!plain) return;
+                                        const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
+                                        let pLast = 0;
+                                        let pMatch;
+                                        while ((pMatch = splitRegex.exec(plain)) !== null) {
+                                          if (pMatch.index > pLast) {
+                                            const prePre = plain.substring(pLast, pMatch.index);
+                                            if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
+                                            else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
+                                          }
+                                          parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
+                                          if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
+                                          pLast = splitRegex.lastIndex;
+                                        }
+                                        if (pLast < plain.length) {
+                                          const leftover = plain.substring(pLast);
+                                          if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
+                                          else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
+                                        }
+                                      };
+
+                                      while ((match = bracketRegex.exec(newText)) !== null) {
+                                        if (match.index > lastIndex) {
+                                          processPlain(newText.substring(lastIndex, match.index));
+                                        }
+                                        let innerText = match[1];
+                                        let isC = false;
+                                        if (innerText.startsWith("*")) { isC = true; innerText = innerText.substring(1); }
+                                        const clickId = `click-${clickIndex++}`;
+                                        parsedSentences.push({ id: clickId, text: innerText, isClickable: true });
+                                        if (isC) parsedCorrect.push(clickId);
+                                        lastIndex = bracketRegex.lastIndex;
+                                      }
+                                      if (lastIndex < newText.length) {
+                                        processPlain(newText.substring(lastIndex));
+                                      }
+                                      
+                                      setHighlightConfig({...highlightConfig, paragraphText: newText, sentences: parsedSentences, correctHighlights: parsedCorrect});
                                     }}
                                     className={cn(
                                       "px-1 py-0.5 mx-0.5 rounded cursor-pointer transition-colors",
-                                      isCorrect ? "bg-success/20 text-success-foreground border-b-2 border-success font-semibold" : "hover:bg-muted"
+                                      isCorrect ? "bg-success/20 text-success-foreground border-b-2 border-success font-semibold" : "bg-muted hover:bg-muted/80 text-foreground"
                                     )}
                                   >
-                                    {sentence.text || "[Empty Sentence]"}
+                                    {sentence.text || "[Empty]"}
                                   </span>
                                 );
                               })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-2 pt-4 border-t border-border">
+                            <label className="text-sm font-semibold text-foreground">Select Correct Highlights</label>
+                            <div className="bg-muted/50 p-6 rounded-xl border border-dashed border-border text-center flex flex-col items-center justify-center gap-2">
+                              <p className="text-sm font-medium text-foreground">No clickable phrases found</p>
+                              <p className="text-xs text-muted-foreground">Wrap any words in brackets <code>[like this]</code> in the paragraph above. They will appear here for you to mark as correct.</p>
                             </div>
                           </div>
                         )}
@@ -1558,135 +1937,14 @@ function CreateQuestion() {
                 </Section>
               ) : null}
 
-              <Section
-                title="Scenario Tabs (Optional)"
-                desc="Add contextual tabs (like Patient Info, Vitals) to display alongside this question."
-              >
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between rounded-xl border border-border bg-background p-4">
-                    <div>
-                      <h4 className="text-sm font-semibold text-foreground">Enable Scenario Tabs</h4>
-                      <p className="text-xs text-muted-foreground">This will show a split-pane layout with the tabs on the left.</p>
-                    </div>
-                    <label className="relative inline-flex cursor-pointer items-center">
-                      <input type="checkbox" className="peer sr-only" checked={includeTabs} onChange={(e) => setIncludeTabs(e.target.checked)} />
-                      <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-border after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none"></div>
-                    </label>
-                  </div>
-                  
-                  {includeTabs && (
-                    <div className="space-y-2">
-                      {tabs.map((t, i) => (
-                        <div key={i} className="flex flex-col gap-2 rounded-xl border border-border bg-background p-2 pl-4">
-                          <div className="flex items-center gap-2">
-                            <Layers2 className="size-4 text-muted-foreground" />
-                            <input
-                              value={t.title}
-                              onChange={(e) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))}
-                              className="flex-1 bg-transparent text-sm outline-none font-bold"
-                              placeholder="Tab Title (e.g. Vitals)"
-                            />
-                            <select
-                              value={t.type || "text"}
-                              onChange={(e) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, type: e.target.value as "text" | "table", tableHeaders: x.tableHeaders || ["Body System", "Findings"], tableRows: x.tableRows || [] } : x)))}
-                              className="bg-muted text-xs font-semibold text-muted-foreground outline-none border border-border rounded-md px-2 py-1.5"
-                            >
-                              <option value="text">Rich Text</option>
-                              <option value="table">Table (EHR)</option>
-                            </select>
-                            <button onClick={() => setTabs(tabs.filter((_, idx) => idx !== i))} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive">
-                              <Trash2 className="size-4" />
-                            </button>
-                          </div>
-                          {(!t.type || t.type === "text") ? (
-                            <RichTextEditor
-                              value={t.content}
-                              onChange={(content) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, content } : x)))}
-                            />
-                          ) : (
-                            <div className="rounded-xl border border-border bg-card p-4 space-y-4">
-                              <div className="flex gap-2 overflow-x-auto pb-2">
-                                {t.tableHeaders?.map((header, hIdx) => (
-                                  <div key={hIdx} className="flex-1 min-w-[150px] space-y-1 relative group">
-                                    <label className="text-xs font-semibold text-muted-foreground flex justify-between">
-                                      Column {hIdx + 1}
-                                      {t.tableHeaders!.length > 1 && (
-                                        <button 
-                                          onClick={() => setTabs(tabs.map((x, idx) => idx === i ? {
-                                            ...x, 
-                                            tableHeaders: x.tableHeaders!.filter((_, idx2) => idx2 !== hIdx),
-                                            tableRows: x.tableRows?.map(r => ({ ...r, cells: r.cells.filter((_, idx2) => idx2 !== hIdx) }))
-                                          } : x))}
-                                          className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
-                                        >
-                                          <X className="size-3" />
-                                        </button>
-                                      )}
-                                    </label>
-                                    <Input 
-                                      value={header} 
-                                      onChange={(e) => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableHeaders: x.tableHeaders!.map((h, idx2) => idx2 === hIdx ? e.target.value : h) } : x))}
-                                      placeholder="Header name" 
-                                    />
-                                  </div>
-                                ))}
-                                <Button
-                                  variant="outline"
-                                  className="mt-5 shrink-0"
-                                  onClick={() => setTabs(tabs.map((x, idx) => idx === i ? {
-                                    ...x,
-                                    tableHeaders: [...(x.tableHeaders || []), `Column ${(x.tableHeaders?.length || 0) + 1}`],
-                                    tableRows: x.tableRows?.map(r => ({ ...r, cells: [...r.cells, ""] }))
-                                  } : x))}
-                                >
-                                  <Plus className="size-4" />
-                                </Button>
-                              </div>
-                              
-                              <div className="space-y-2">
-                                {t.tableRows?.map((row, rIndex) => (
-                                  <div key={row.id} className="flex gap-2 items-start">
-                                    <div className="flex-1 flex gap-2 overflow-x-auto">
-                                      {row.cells.map((cell, cIdx) => (
-                                        <Input 
-                                          key={cIdx}
-                                          value={cell} 
-                                          onChange={(e) => setTabs(tabs.map((x, idx) => idx === i ? { 
-                                            ...x, 
-                                            tableRows: x.tableRows?.map(r => r.id === row.id ? { ...r, cells: r.cells.map((c, idx2) => idx2 === cIdx ? e.target.value : c) } : r) 
-                                          } : x))}
-                                          className={cn("min-w-[150px] flex-1", cIdx === 0 && "font-bold bg-muted/50")}
-                                          placeholder={`Row ${rIndex + 1}, Col ${cIdx + 1}`} 
-                                        />
-                                      ))}
-                                    </div>
-                                    <button onClick={() => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableRows: x.tableRows?.filter(r => r.id !== row.id) } : x))} className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive shrink-0 border border-border">
-                                      <Trash2 className="size-4" />
-                                    </button>
-                                  </div>
-                                ))}
-                                <Button 
-                                  variant="outline" 
-                                  size="sm" 
-                                  className="w-full text-xs" 
-                                  onClick={() => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableRows: [...(x.tableRows || []), { id: Math.random().toString(36).substring(7), cells: Array(x.tableHeaders?.length || 2).fill("") }] } : x))}
-                                >
-                                  <Plus className="size-3 mr-1" /> Add Row
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                      {tabs.length < 4 && (
-                        <button onClick={() => setTabs([...tabs, { title: "New Tab", content: "" }])} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-3 text-sm font-medium text-primary hover:bg-muted">
-                          <Plus className="size-4" weight="regular" /> Add Tab
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </Section>
+              {group === "ungrouped" && (
+                <ScenarioTabsEditor 
+                  includeTabs={includeTabs} 
+                  setIncludeTabs={setIncludeTabs} 
+                  tabs={tabs} 
+                  setTabs={setTabs} 
+                />
+              )}
 
               <Section title="Explanation & Rationale" desc="Provide evidence-based reasoning with images">
                 <RichTextEditor
@@ -1727,9 +1985,93 @@ function CreateQuestion() {
                         <p className="text-muted-foreground">Configured Blanks: {Object.keys(clozeBlanks).length}</p>
                       </div>
                     ) : type === "next-gen-highlight" && (
-                      <div className="rounded-xl border border-border p-4 text-sm bg-muted/20">
-                        <div className="font-semibold text-primary mb-2">Click to Highlight Configured</div>
-                        <p className="text-muted-foreground">Layout: <span className="capitalize">{highlightConfig.layout || "paragraph"}</span> | Sentences/Phrases: {highlightConfig.layout === "table" ? (highlightConfig.tables || []).reduce((acc, t) => acc + t.rows.reduce((rAcc, r) => rAcc + r.sentences.length, 0), 0) : highlightConfig.sentences?.length || 0} | Correct Highlights: {highlightConfig.correctHighlights?.length || 0}</p>
+                      <div className="rounded-xl border border-border p-4 text-sm bg-muted/20 space-y-4">
+                        <div>
+                          <div className="font-semibold text-primary mb-1">Click to Highlight Configured</div>
+                          <p className="text-muted-foreground text-xs">Layout: <span className="capitalize">{highlightConfig.layout || "paragraph"}</span> | Sentences/Phrases: {highlightConfig.layout === "table" ? (highlightConfig.tables || []).reduce((acc: any, t: any) => acc + t.rows.reduce((rAcc: any, r: any) => rAcc + r.sentences.length, 0), 0) : highlightConfig.sentences?.length || 0} | Correct Highlights: {highlightConfig.correctHighlights?.length || 0}</p>
+                        </div>
+                        
+                        {highlightConfig.layout === "table" && highlightConfig.tables && highlightConfig.tables.some((t: any) => t.rows.some((r: any) => r.sentences.length > 0)) && (
+                          <div className="mt-4 bg-background rounded-lg overflow-hidden border border-border shadow-sm">
+                            <div className="flex border-b border-border gap-1 overflow-x-auto bg-muted/30">
+                              {highlightConfig.tables.map((t: any, idx: number) => (
+                                <button
+                                  key={t.id}
+                                  type="button"
+                                  onClick={(e) => { e.preventDefault(); setActiveHighlightTab(idx); }}
+                                  className={cn(
+                                    "px-4 py-2 text-[12px] font-bold rounded-t-md relative z-10 transition-colors border border-b-0",
+                                    activeHighlightTab === idx
+                                      ? "text-foreground bg-card border-border -mb-[1px]"
+                                      : "text-muted-foreground bg-transparent border-transparent hover:bg-muted"
+                                  )}
+                                >
+                                  {t.tabName || "Unnamed Tab"}
+                                </button>
+                              ))}
+                            </div>
+                            
+                            {highlightConfig.tables[activeHighlightTab] && (
+                              <div className="overflow-x-auto bg-card">
+                                <table className="w-full text-left text-[12px]">
+                                  <thead className="bg-[#eaf3fa] text-slate-900 border-b border-border">
+                                    <tr>
+                                      <th className="p-3 font-bold w-[30%]">{highlightConfig.tables[activeHighlightTab].headers?.col1 || "Body System"}</th>
+                                      <th className="p-3 font-bold">{highlightConfig.tables[activeHighlightTab].headers?.col2 || "Findings"}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {highlightConfig.tables[activeHighlightTab].rows?.map((row: any, rIndex: number) => (
+                                      <tr key={row.id} className={rIndex % 2 === 0 ? "bg-slate-50/70" : "bg-card"}>
+                                        <td className="p-3 font-bold text-slate-800 align-top">{row.label}</td>
+                                        <td className="p-3 leading-relaxed align-top">
+                                          {row.sentences?.map((s: any, i: number) => {
+                                            const isCorrect = (highlightConfig.correctHighlights || []).includes(s.id);
+                                            return (
+                                              <span key={s.id}>
+                                                <span
+                                                  className={cn(
+                                                    "transition-all rounded-sm py-0.5",
+                                                    isCorrect ? "bg-success/30 border-b-2 border-success font-semibold" : "bg-transparent"
+                                                  )}
+                                                >
+                                                  {s.text || "[Empty]"}
+                                                </span>
+                                                {i < row.sentences.length - 1 && " "}
+                                              </span>
+                                            );
+                                          })}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {(!highlightConfig.layout || highlightConfig.layout === "paragraph") && highlightConfig.sentences && highlightConfig.sentences.length > 0 && (
+                          <div className="mt-4 bg-background p-4 rounded-lg border border-border shadow-sm leading-relaxed text-[13px]">
+                            {highlightConfig.sentences.map((sentence: any) => {
+                              if (!sentence.isClickable) {
+                                return <span key={sentence.id}>{sentence.text}</span>;
+                              }
+                              const isCorrect = (highlightConfig.correctHighlights || []).includes(sentence.id);
+                              return (
+                                <span
+                                  key={sentence.id}
+                                  className={cn(
+                                    "transition-all rounded-sm py-0.5",
+                                    isCorrect ? "bg-success/30 border-b-2 border-success font-semibold" : "bg-transparent"
+                                  )}
+                                >
+                                  {sentence.text}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1804,44 +2146,38 @@ function CreateQuestion() {
                     }
                   }
                   if (step === 2) {
-                    if (group !== "grouped" && isEmpty(stem)) {
-                      toast.error("Question stem cannot be blank.");
-                      return;
-                    }
-                    if (group !== "grouped") {
-                      if (type.startsWith("mcq")) {
-                        if (options.some((opt) => isEmpty(opt.text))) {
-                          toast.error("All answer options must be filled.");
-                          return;
-                        }
-                        if (!options.some((opt) => opt.correct)) {
-                          toast.error("Please mark at least one correct answer.");
-                          return;
-                        }
-                      } else if (type === "bowtie") {
-                        const actions = bowtieConfig.actions?.filter((a: any) => !isEmpty(a.text)) || [];
-                        const conditions = bowtieConfig.conditions?.filter((c: any) => !isEmpty(c.text)) || [];
-                        const parameters = bowtieConfig.parameters?.filter((p: any) => !isEmpty(p.text)) || [];
-                        
-                        if (actions.length < 2 || conditions.length < 1 || parameters.length < 2) {
-                          toast.error("Please fill in at least 2 Causes/Treatments and 1 Core Condition.");
-                          return;
-                        }
-                        const correctConditions = conditions.filter((c: any) => c.isCorrect);
-                        if (correctConditions.length !== 1) {
-                          toast.error("There must be exactly 1 correct Potential Condition (cannot be empty).");
-                          return;
-                        }
-                        if (!actions.some((a: any) => a.isCorrect) || !parameters.some((p: any) => p.isCorrect)) {
-                          toast.error("Please mark at least one correct Action and one correct Parameter (cannot be empty).");
-                          return;
-                        }
+                    let itemsToValidate = [];
+                    if (group === "grouped") {
+                      const currentSubs = [...subQuestions];
+                      if (activeSubIndex >= 0 && currentSubs[activeSubIndex]) {
+                        currentSubs[activeSubIndex] = {
+                          ...currentSubs[activeSubIndex],
+                          type, stem, options, bowtieConfig, tableConfig, clozeBlanks, clozeDependencies, highlightConfig, rationale
+                        };
                       }
+                      itemsToValidate = currentSubs;
+                      if (itemsToValidate.length === 0) {
+                         toast.error("Grouped questions must have at least one item.");
+                         return;
+                      }
+                      
+                      const stripHtml = (html: string) => { const tmp = document.createElement("DIV"); tmp.innerHTML = html; return tmp.textContent || tmp.innerText || ""; };
+                      const hasImage = (html: string) => html?.includes("<img");
+                      const isEmpty = (html: string) => { if (!html) return true; if (hasImage(html)) return false; return stripHtml(html).trim() === ""; };
+                      const currentParentStem = activeSubIndex === -1 ? stem : parentStem;
+                      if (isEmpty(currentParentStem)) {
+                        toast.error("Common Case Scenario cannot be blank.");
+                        return;
+                      }
+                    } else {
+                      itemsToValidate = [{ type, stem, options, bowtieConfig, tableConfig, clozeBlanks, clozeDependencies, highlightConfig, rationale }];
                     }
-                    
-                    if (isEmpty(rationale)) {
-                      toast.error("Rationale cannot be blank.");
-                      return;
+
+                    for (let i = 0; i < itemsToValidate.length; i++) {
+                       const prefix = group === "grouped" ? `Item ${i + 1}: ` : "";
+                       if (!validateItem(itemsToValidate[i], prefix)) {
+                          return;
+                       }
                     }
                   }
                   setStep(step + 1);
@@ -1948,6 +2284,147 @@ function Select({ value, onChange, options, placeholder }: { value: string; onCh
         ))}
       </SelectContent>
     </UISelect>
+  );
+}
+
+function ScenarioTabsEditor({
+  includeTabs, setIncludeTabs, tabs, setTabs
+}: {
+  includeTabs: boolean;
+  setIncludeTabs: (val: boolean) => void;
+  tabs: any[];
+  setTabs: (val: any[]) => void;
+}) {
+  return (
+    <Section
+      title="Scenario Tabs (Optional)"
+      desc="Add contextual tabs (like Patient Info, Vitals) to display alongside this question."
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between rounded-xl border border-border bg-background p-4">
+          <div>
+            <h4 className="text-sm font-semibold text-foreground">Enable Scenario Tabs</h4>
+            <p className="text-xs text-muted-foreground">This will show a split-pane layout with the tabs on the left.</p>
+          </div>
+          <label className="relative inline-flex cursor-pointer items-center">
+            <input type="checkbox" className="peer sr-only" checked={includeTabs} onChange={(e) => setIncludeTabs(e.target.checked)} />
+            <div className="peer h-6 w-11 rounded-full bg-muted after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-border after:bg-white after:transition-all after:content-[''] peer-checked:bg-primary peer-checked:after:translate-x-full peer-checked:after:border-white peer-focus:outline-none"></div>
+          </label>
+        </div>
+        
+        {includeTabs && (
+          <div className="space-y-2">
+            {tabs.map((t, i) => (
+              <div key={i} className="flex flex-col gap-2 rounded-xl border border-border bg-background p-2 pl-4">
+                <div className="flex items-center gap-2">
+                  <Layers2 className="size-4 text-muted-foreground" />
+                  <input
+                    value={t.title}
+                    onChange={(e) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))}
+                    className="flex-1 bg-transparent text-sm outline-none font-bold"
+                    placeholder="Tab Title (e.g. Vitals)"
+                  />
+                  <select
+                    value={t.type || "text"}
+                    onChange={(e) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, type: e.target.value as "text" | "table", tableHeaders: x.tableHeaders || ["Body System", "Findings"], tableRows: x.tableRows || [] } : x)))}
+                    className="bg-muted text-xs font-semibold text-muted-foreground outline-none border border-border rounded-md px-2 py-1.5"
+                  >
+                    <option value="text">Rich Text</option>
+                    <option value="table">Table (EHR)</option>
+                  </select>
+                  <button onClick={() => setTabs(tabs.filter((_, idx) => idx !== i))} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+                {(!t.type || t.type === "text") ? (
+                  <RichTextEditor
+                    value={t.content}
+                    onChange={(content) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, content } : x)))}
+                  />
+                ) : (
+                  <div className="rounded-xl border border-border bg-card p-4 space-y-4">
+                    <div className="flex gap-2 overflow-x-auto pb-2">
+                      {t.tableHeaders?.map((header: any, hIdx: number) => (
+                        <div key={hIdx} className="flex-1 min-w-[150px] space-y-1 relative group">
+                          <label className="text-xs font-semibold text-muted-foreground flex justify-between">
+                            Column {hIdx + 1}
+                            {t.tableHeaders!.length > 1 && (
+                              <button 
+                                onClick={() => setTabs(tabs.map((x, idx) => idx === i ? {
+                                  ...x, 
+                                  tableHeaders: x.tableHeaders!.filter((_: any, idx2: number) => idx2 !== hIdx),
+                                  tableRows: x.tableRows?.map((r: any) => ({ ...r, cells: r.cells.filter((_: any, idx2: number) => idx2 !== hIdx) }))
+                                } : x))}
+                                className="opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive/80 transition-opacity"
+                              >
+                                <X className="size-3" />
+                              </button>
+                            )}
+                          </label>
+                          <Input 
+                            value={header} 
+                            onChange={(e) => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableHeaders: x.tableHeaders!.map((h: any, idx2: number) => idx2 === hIdx ? e.target.value : h) } : x))}
+                            placeholder="Header name" 
+                          />
+                        </div>
+                      ))}
+                      <Button
+                        variant="outline"
+                        className="mt-5 shrink-0"
+                        onClick={() => setTabs(tabs.map((x, idx) => idx === i ? {
+                          ...x,
+                          tableHeaders: [...(x.tableHeaders || []), `Column ${(x.tableHeaders?.length || 0) + 1}`],
+                          tableRows: x.tableRows?.map((r: any) => ({ ...r, cells: [...r.cells, ""] }))
+                        } : x))}
+                      >
+                        <Plus className="size-4" />
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      {t.tableRows?.map((row: any, rIndex: number) => (
+                        <div key={row.id} className="flex gap-2 items-start">
+                          <div className="flex-1 flex gap-2 overflow-x-auto">
+                            {row.cells.map((cell: any, cIdx: number) => (
+                              <Input 
+                                key={cIdx}
+                                value={cell} 
+                                onChange={(e) => setTabs(tabs.map((x, idx) => idx === i ? { 
+                                  ...x, 
+                                  tableRows: x.tableRows?.map((r: any) => r.id === row.id ? { ...r, cells: r.cells.map((c: any, idx2: number) => idx2 === cIdx ? e.target.value : c) } : r) 
+                                } : x))}
+                                className={cn("min-w-[150px] flex-1", cIdx === 0 && "font-bold bg-muted/50")}
+                                placeholder={`Row ${rIndex + 1}, Col ${cIdx + 1}`} 
+                              />
+                            ))}
+                          </div>
+                          <button onClick={() => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableRows: x.tableRows?.filter((r: any) => r.id !== row.id) } : x))} className="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive shrink-0 border border-border">
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
+                      ))}
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="w-full text-xs" 
+                        onClick={() => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableRows: [...(x.tableRows || []), { id: Math.random().toString(36).substring(7), cells: Array(x.tableHeaders?.length || 2).fill("") }] } : x))}
+                      >
+                        <Plus className="size-3 mr-1" /> Add Row
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+            {tabs.length < 4 && (
+              <button onClick={() => setTabs([...tabs, { title: "New Tab", content: "" }])} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-3 text-sm font-medium text-primary hover:bg-muted">
+                <Plus className="size-4" weight="regular" /> Add Tab
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </Section>
   );
 }
 

@@ -888,6 +888,10 @@ export default function StudentTestSession() {
         ) : (
           <div className="space-y-2 text-[14px] leading-relaxed text-slate-800">
             {activeQuestion.options?.sentences?.map((s: any, i: number) => {
+              if (s.isClickable === false) {
+                 return <span key={s.id}>{s.text}</span>;
+              }
+
               const isSelected = selected.includes(s.id);
               const isExpected = activeQuestion.options?.correctHighlights?.includes(s.id);
               
@@ -909,7 +913,7 @@ export default function StudentTestSession() {
                   >
                     {s.text}
                   </span>
-                  {i < (activeQuestion.options?.sentences?.length || 0) - 1 && " "}
+                  {s.isClickable === undefined && i < (activeQuestion.options?.sentences?.length || 0) - 1 && " "}
                 </span>
               );
             })}
@@ -1280,24 +1284,32 @@ export default function StudentTestSession() {
     }
   };
 
-  const renderHeader = () => (
-    <>
-      {activeQuestion.is_subquestion ? (
-        <div className="mb-3 text-[13px] font-bold text-slate-800">
-          Item {activeQuestion.sub_index + 1} of {activeQuestion.sub_total}
+  const renderHeader = () => {
+    let contentHTML = activeQuestion.type === "next-gen-cloze" && !activeQuestion.is_subquestion 
+      ? "Complete the statement" 
+      : activeQuestion.text;
+
+    contentHTML = (contentHTML || "").replace(/{dropdown\s*\d*}/gi, '________');
+
+    return (
+      <>
+        {activeQuestion.is_subquestion ? (
+          <div className="mb-3 text-[13px] font-bold text-slate-800">
+            Item {activeQuestion.sub_index + 1} of {activeQuestion.sub_total}
+          </div>
+        ) : (
+          <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question {(currentIndex + 1).toString().padStart(2, '0')}</div>
+        )}
+        <div className="mb-6 flex items-start gap-3">
+          <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
+          <div 
+            className="text-[14px] font-normal leading-relaxed text-slate-800 break-words prose prose-slate prose-sm max-w-none prose-p:my-1"
+            dangerouslySetInnerHTML={{ __html: contentHTML }}
+          />
         </div>
-      ) : (
-        <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question {(currentIndex + 1).toString().padStart(2, '0')}</div>
-      )}
-      <div className="mb-6 flex items-start gap-3">
-        {!activeQuestion.is_subquestion && <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>}
-        <div 
-          className="text-[14px] font-normal leading-relaxed text-slate-800 break-words prose prose-slate prose-sm max-w-none prose-p:my-1"
-          dangerouslySetInnerHTML={{ __html: activeQuestion.is_subquestion ? (activeQuestion.parent_stem?.replace(/{dropdown\s*\d*}/gi, '________') || "") : (activeQuestion.type === "next-gen-cloze" ? "Complete the statement" : activeQuestion.text) }}
-        />
-      </div>
-    </>
-  );
+      </>
+    );
+  };
 
   const renderScenario = () => {
     if (!activeQuestion.scenario_tabs || activeQuestion.scenario_tabs.length === 0) return null;
@@ -1629,7 +1641,7 @@ export default function StudentTestSession() {
             ) : renderLayout()}
 
           </div>
-        </main>
+        </main> 
       </div>
     </StudentLayout>
   );
