@@ -122,8 +122,172 @@ const renderOptionsPreview = (q: any) => {
       </div>
     );
   }
+  if (q.type === "next-gen-highlight") {
+    if (opts?.layout === "table") {
+      return (
+        <div className="space-y-6">
+          {opts.tables?.map((t: any, i: number) => (
+             <div key={i} className="border border-border rounded-xl overflow-hidden">
+               <div className="bg-muted px-4 py-2 font-semibold text-sm border-b">{t.tabName}</div>
+               <table className="w-full text-sm text-left">
+                  <thead className="bg-muted/50 text-muted-foreground text-xs uppercase">
+                    <tr>
+                      <th className="px-4 py-3 font-medium">{t.headers?.col1}</th>
+                      <th className="px-4 py-3 font-medium">{t.headers?.col2}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                     {t.rows?.map((r: any, ri: number) => (
+                        <tr key={ri} className="bg-card">
+                          <td className="px-4 py-3 font-medium align-top max-w-[200px] break-words">{r.rowLabel}</td>
+                          <td className="px-4 py-3 align-top">
+                             {r.sentences?.map((s: any) => (
+                               <span key={s.id} className={cn("inline rounded px-1", opts.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
+                                 {s.text}{" "}
+                               </span>
+                             ))}
+                          </td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+             </div>
+          ))}
+        </div>
+      );
+    } else {
+      return (
+        <div className="text-sm leading-relaxed bg-muted/10 p-5 rounded-xl border border-border prose prose-sm max-w-none">
+          {opts?.sentences?.map((s: any) => (
+            <span key={s.id} className={cn("inline rounded px-1", opts.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
+              {s.text}{" "}
+            </span>
+          ))}
+        </div>
+      );
+    }
+  }
+
+  if (q.type === "table") {
+    return (
+      <div className="border border-border rounded-xl overflow-hidden">
+        <table className="w-full text-sm text-left">
+          <thead className="bg-muted text-muted-foreground text-xs uppercase">
+            <tr>
+              <th className="px-4 py-3 font-medium w-1/3 border-r"></th>
+              {opts?.columns?.map((c: any) => (
+                <th key={c.id} className="px-4 py-3 font-medium text-center">{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+             {opts?.rows?.map((r: any) => (
+                <tr key={r.id} className="bg-card">
+                  <td className="px-4 py-3 font-medium border-r">{r.text}</td>
+                  {opts?.columns?.map((c: any) => {
+                     const isCorrect = opts.multiSelect 
+                        ? (opts.correctAnswers?.[r.id] || []).includes(c.id) 
+                        : opts.correctAnswers?.[r.id] === c.id;
+                     return (
+                        <td key={c.id} className="px-4 py-3 text-center border-l first:border-l-0">
+                           {isCorrect && <Check className="w-4 h-4 mx-auto text-teal-600 font-bold" />}
+                        </td>
+                     );
+                  })}
+                </tr>
+             ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
   return null;
 };
+
+function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
+  const [activeTab, setActiveTab] = useState(0);
+  const scenarioTabs = previewQuestion.options?.scenario_tabs || previewQuestion.scenario_tabs;
+
+  return (
+    <div className="mt-4 flex flex-col md:flex-row gap-6 items-start">
+      {scenarioTabs && scenarioTabs.length > 0 && (
+        <div className="w-full md:w-1/2 flex flex-col border border-border rounded-2xl overflow-hidden bg-card sticky top-0">
+          <div className="flex overflow-x-auto border-b border-border bg-muted/30">
+             {scenarioTabs.map((t: any, i: number) => (
+               <button
+                 key={i}
+                 onClick={() => setActiveTab(i)}
+                 className={cn("px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors", activeTab === i ? "border-b-2 border-primary text-primary bg-background" : "text-muted-foreground hover:bg-muted/50")}
+               >
+                 {t.tabName}
+               </button>
+             ))}
+          </div>
+          <div className="p-5 overflow-y-auto max-h-[500px]">
+             {scenarioTabs[activeTab] && (
+                <div 
+                  className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem]" 
+                  dangerouslySetInnerHTML={{ __html: scenarioTabs[activeTab].content || "" }} 
+                />
+             )}
+          </div>
+        </div>
+      )}
+
+      <div className={cn("flex flex-col space-y-6", scenarioTabs && scenarioTabs.length > 0 ? "w-full md:w-1/2" : "w-full")}>
+        {previewQuestion.group_type === "grouped" ? (
+          <div className="space-y-8">
+            {previewQuestion.options?.subQuestions?.map((sq: any, i: number) => (
+              <div key={i} className="border border-border rounded-2xl p-5 bg-card">
+                <div className="font-bold text-teal-700 mb-4 pb-2 border-b">Sub-question {i + 1} ({formatQuestionType(sq.type)})</div>
+                <div 
+                  className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
+                  dangerouslySetInnerHTML={{ 
+                    __html: sq.type === "next-gen-cloze" 
+                      ? (sq.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                      : (sq.stem || "") 
+                  }} 
+                />
+                <div className="space-y-2 mb-6">
+                  {renderOptionsPreview(sq)}
+                </div>
+                <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
+                  <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
+                  <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: sq.rationale || "" }} />
+                </div>
+              </div>
+            ))}
+            {previewQuestion.rationale && (
+              <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overall Rationale</div>
+                <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div 
+              className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
+              dangerouslySetInnerHTML={{ 
+                __html: previewQuestion.type === "next-gen-cloze" 
+                  ? (previewQuestion.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                  : (previewQuestion.stem || "") 
+              }} 
+            />
+            <div className="space-y-2 mb-6">
+              {renderOptionsPreview(previewQuestion)}
+            </div>
+            <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
+              <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function PreviousQuestions() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -487,58 +651,7 @@ function PreviousQuestions() {
               {previewQuestion?.category} • {previewQuestion?.subcategory} ({formatQuestionType(previewQuestion?.type || "")})
             </DialogDescription>
           </DialogHeader>
-          {previewQuestion && (
-            <div className="mt-4">
-              {previewQuestion.group_type === "grouped" ? (
-                <div className="space-y-8">
-                  {previewQuestion.options?.subQuestions?.map((sq: any, i: number) => (
-                    <div key={i} className="border border-border rounded-2xl p-5 bg-card">
-                      <div className="font-bold text-teal-700 mb-4 pb-2 border-b">Sub-question {i + 1} ({formatQuestionType(sq.type)})</div>
-                      <div 
-                        className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
-                        dangerouslySetInnerHTML={{ 
-                          __html: sq.type === "next-gen-cloze" 
-                            ? (sq.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
-                            : (sq.stem || "") 
-                        }} 
-                      />
-                      <div className="space-y-2 mb-6">
-                        {renderOptionsPreview(sq)}
-                      </div>
-                      <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
-                        <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
-                        <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: sq.rationale || "" }} />
-                      </div>
-                    </div>
-                  ))}
-                  {previewQuestion.rationale && (
-                    <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
-                      <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overall Rationale</div>
-                      <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  <div 
-                    className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
-                    dangerouslySetInnerHTML={{ 
-                      __html: previewQuestion.type === "next-gen-cloze" 
-                        ? (previewQuestion.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
-                        : (previewQuestion.stem || "") 
-                    }} 
-                  />
-                  <div className="space-y-2 mb-6">
-                    {renderOptionsPreview(previewQuestion)}
-                  </div>
-                  <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
-                    <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Rationale</div>
-                    <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+          {previewQuestion && <QuestionPreviewContent previewQuestion={previewQuestion} />}
         </DialogContent>
       </Dialog>
     </AdminLayout>
