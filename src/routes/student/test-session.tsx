@@ -282,15 +282,20 @@ export default function StudentTestSession() {
   };
 
   useEffect(() => {
-    if (activePool.length > 0 && !answerState) {
-      if (config.mode === 'review') {
-        setAnswerState(activePool[currentIndex]._submittedAnswer);
-        setIsSubmitted(true);
-      } else {
-        setAnswerState(getInitialState(activePool[currentIndex]));
-      }
+    if (activePool.length === 0) return;
+    const q = activePool[currentIndex];
+    
+    if (config.mode === 'review') {
+      setAnswerState(q._submittedAnswer);
+      setIsSubmitted(true);
+    } else if (q._sessionSubmitted) {
+      setAnswerState(q._sessionAnswerState);
+      setIsSubmitted(true);
+    } else if (!answerState) {
+      setAnswerState(getInitialState(q));
+      setIsSubmitted(false);
     }
-  }, [activePool, currentIndex]);
+  }, [currentIndex, activePool, config.mode]);
 
   // Derived validation logic based on type
   const canSubmit = useMemo(() => {
@@ -370,16 +375,16 @@ export default function StudentTestSession() {
 
   const handleNext = () => {
     if (currentIndex < activePool.length - 1) {
-      const nextQ = activePool[currentIndex + 1];
-      setCurrentIndex(prev => prev + 1);
-      
-      if (config.mode === 'review') {
-        setAnswerState(nextQ._submittedAnswer);
+      const nextIdx = currentIndex + 1;
+      const nextQ = activePool[nextIdx];
+      if (config.mode === 'review' || nextQ._sessionSubmitted) {
+        setAnswerState(config.mode === 'review' ? nextQ._submittedAnswer : nextQ._sessionAnswerState);
         setIsSubmitted(true);
       } else {
         setIsSubmitted(false);
         setAnswerState(getInitialState(nextQ));
       }
+      setCurrentIndex(nextIdx);
     } else {
       if (config.mode !== 'review') handleEndSession();
     }
@@ -387,20 +392,27 @@ export default function StudentTestSession() {
 
   const handlePrev = () => {
     if (currentIndex > 0) {
-      const prevQ = activePool[currentIndex - 1];
-      setCurrentIndex(prev => prev - 1);
-      if (config.mode === 'review') {
-        setAnswerState(prevQ._submittedAnswer);
+      const prevIdx = currentIndex - 1;
+      const prevQ = activePool[prevIdx];
+      if (config.mode === 'review' || prevQ._sessionSubmitted) {
+        setAnswerState(config.mode === 'review' ? prevQ._submittedAnswer : prevQ._sessionAnswerState);
         setIsSubmitted(true);
       } else {
         setIsSubmitted(false);
         setAnswerState(getInitialState(prevQ));
       }
+      setCurrentIndex(prevIdx);
     }
   };
 
   const handleSubmitAnswer = async () => {
     setIsSubmitted(true);
+    
+    const updatedPool = [...activePool];
+    updatedPool[currentIndex]._sessionSubmitted = true;
+    updatedPool[currentIndex]._sessionAnswerState = answerState;
+    setActivePool(updatedPool);
+
     if (sessionId && activeQuestion) {
       const payloadOptions = activeQuestion.is_subquestion 
         ? { answers: answerState, _sub_index: activeQuestion.sub_index }
@@ -419,6 +431,11 @@ export default function StudentTestSession() {
   };
 
   const handleSkip = async () => {
+    const updatedPool = [...activePool];
+    updatedPool[currentIndex]._sessionSubmitted = false;
+    updatedPool[currentIndex]._sessionAnswerState = null;
+    setActivePool(updatedPool);
+
     if (sessionId && activeQuestion) {
       const payloadOptions = activeQuestion.is_subquestion 
         ? { answers: null, _sub_index: activeQuestion.sub_index }

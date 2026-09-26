@@ -1495,48 +1495,146 @@ function CreateQuestion() {
                                     
                                     <div className="space-y-2 pl-4 border-l-2 border-muted">
                                       <div className="flex items-center justify-between">
-                                        <label className="text-xs font-semibold text-muted-foreground">Findings (Phrases to Highlight)</label>
-                                        <button
-                                          onClick={() => {
-                                            const newTables = [...highlightConfig.tables!];
-                                            newTables[activeHighlightTab].rows[rIdx].sentences.push({ id: `s-${Math.random().toString(36).substring(7)}`, text: "" });
-                                            setHighlightConfig({...highlightConfig, tables: newTables});
-                                          }}
-                                          className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
-                                        >
-                                          <Plus className="size-3" /> Add Phrase
-                                        </button>
+                                        <label className="text-xs font-semibold text-muted-foreground">Findings (Wrap clickable text in brackets)</label>
+                                        <div className="flex items-center gap-3">
+                                          <button
+                                            type="button"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => {
+                                              const ta = document.getElementById(`row-editor-${row.id}`) as HTMLTextAreaElement;
+                                              if (!ta) return;
+                                              const start = ta.selectionStart;
+                                              const end = ta.selectionEnd;
+                                              if (start === end) {
+                                                toast.error("Please select some text first.");
+                                                return;
+                                              }
+                                              const text = row.rawText ?? (row.sentences || []).map((s: any) => s.isClickable !== false ? `[${s.text}]` : s.text).join(" ");
+                                              const selected = text.substring(start, end);
+                                              const newText = text.substring(0, start) + `[${selected}]` + text.substring(end);
+                                              const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                                              nativeSetter?.call(ta, newText);
+                                              ta.dispatchEvent(new Event('input', { bubbles: true }));
+                                            }}
+                                            className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1 bg-primary/10 px-2 py-1 rounded-md"
+                                          >
+                                            [ ] Make Clickable
+                                          </button>
+                                          <button
+                                            type="button"
+                                            onMouseDown={(e) => e.preventDefault()}
+                                            onClick={() => {
+                                              const ta = document.getElementById(`row-editor-${row.id}`) as HTMLTextAreaElement;
+                                              if (!ta) return;
+                                              const start = ta.selectionStart;
+                                              const end = ta.selectionEnd;
+                                              if (start === end) {
+                                                toast.error("Please select some text first.");
+                                                return;
+                                              }
+                                              const text = row.rawText ?? (row.sentences || []).map((s: any) => s.isClickable !== false ? `[${s.text}]` : s.text).join(" ");
+                                              const selected = text.substring(start, end);
+                                              const newText = text.substring(0, start) + `[*${selected}]` + text.substring(end);
+                                              const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                                              nativeSetter?.call(ta, newText);
+                                              ta.dispatchEvent(new Event('input', { bubbles: true }));
+                                            }}
+                                            className="text-[11px] font-semibold text-success hover:underline flex items-center gap-1 bg-success/10 px-2 py-1 rounded-md"
+                                          >
+                                            [*] Mark Correct
+                                          </button>
+                                        </div>
                                       </div>
-                                      <div className="space-y-2">
-                                        {row.sentences.map((sentence, sIdx) => (
-                                          <div key={sentence.id} className="flex gap-2">
-                                            <input
-                                              value={sentence.text}
-                                              onChange={(e) => {
-                                                const newTables = [...highlightConfig.tables!];
-                                                newTables[activeHighlightTab].rows[rIdx].sentences[sIdx].text = e.target.value;
-                                                setHighlightConfig({...highlightConfig, tables: newTables});
-                                              }}
-                                              placeholder="e.g. increased confusion"
-                                              className="flex-1 rounded-md border border-border px-3 py-1.5 text-sm bg-background"
-                                            />
-                                            <button
-                                              onClick={() => {
-                                                const newTables = [...highlightConfig.tables!];
-                                                newTables[activeHighlightTab].rows[rIdx].sentences = newTables[activeHighlightTab].rows[rIdx].sentences.filter(s => s.id !== sentence.id);
-                                                const newC = (highlightConfig.correctHighlights || []).filter(id => id !== sentence.id);
-                                                setHighlightConfig({...highlightConfig, tables: newTables, correctHighlights: newC});
-                                              }}
-                                              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive shrink-0"
-                                            >
-                                              <X className="size-3" weight="bold" />
-                                            </button>
-                                          </div>
-                                        ))}
-                                        {row.sentences.length === 0 && (
-                                          <div className="text-xs text-muted-foreground py-2 italic">No phrases added.</div>
-                                        )}
-                                      </div>
+                                      <textarea
+                                        id={`row-editor-${row.id}`}
+                                        value={row.rawText ?? (row.sentences || []).map((s: any) => s.isClickable !== false ? `[${s.text}]` : s.text).join(" ")}
+                                        onChange={(e) => {
+                                          const text = e.target.value;
+                                          const newTables = [...highlightConfig.tables!];
+                                          
+                                          let parsedSentences: any[] = [];
+                                          let parsedCorrect: string[] = [];
+                                          const bracketRegex = /\[(.*?)\]/g;
+                                          let lastIndex = 0;
+                                          let match;
+                                          let clickIndex = 0;
+                                          
+                                          const processPlain = (plain: string) => {
+                                            if (!plain) return;
+                                            parsedSentences.push({ id: `text-${row.id}-${clickIndex++}`, text: plain, isClickable: false });
+                                          };
+                                          
+                                          while ((match = bracketRegex.exec(text)) !== null) {
+                                            if (match.index > lastIndex) {
+                                              processPlain(text.substring(lastIndex, match.index));
+                                            }
+                                            let innerText = match[1];
+                                            let isC = false;
+                                            if (innerText.startsWith("*")) { isC = true; innerText = innerText.substring(1); }
+                                            const clickId = `click-${row.id}-${clickIndex++}`;
+                                            parsedSentences.push({ id: clickId, text: innerText, isClickable: true });
+                                            if (isC) parsedCorrect.push(clickId);
+                                            lastIndex = bracketRegex.lastIndex;
+                                          }
+                                          if (lastIndex < text.length) {
+                                            processPlain(text.substring(lastIndex));
+                                          }
+                                          
+                                          newTables[activeHighlightTab].rows[rIdx].rawText = text;
+                                          newTables[activeHighlightTab].rows[rIdx].sentences = parsedSentences;
+                                          
+                                          const currentC = highlightConfig.correctHighlights || [];
+                                          // Retain existing correct highlights from other rows, and replace this row's correct highlights with parsedCorrect
+                                          const otherRowsC = currentC.filter((id: string) => !id.includes(`-${row.id}-`));
+                                          const finalCorrect = [...otherRowsC, ...parsedCorrect];
+                                          
+                                          setHighlightConfig({...highlightConfig, tables: newTables, correctHighlights: parsedCorrect.length > 0 ? finalCorrect : currentC});
+                                        }}
+                                        placeholder="e.g. The patient reported [*severe chest pain] radiating to the arm."
+                                        className="w-full min-h-[80px] rounded-lg border border-border p-3 text-sm bg-background resize-y outline-none focus:border-primary"
+                                      />
+                                      {row.sentences && row.sentences.length > 0 && (
+                                        <div className="mt-2 p-3 bg-muted/20 border border-border rounded-lg text-[13px] leading-relaxed text-foreground">
+                                          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block flex items-center gap-2">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 256 256"><path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.48c.35.79,8.82,19.58,27.65,38.41C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.35c18.83-18.83,27.3-37.62,27.65-38.41A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"></path></svg>
+                                            Live Preview
+                                          </span>
+                                          {row.sentences.map((s: any, i: number) => {
+                                            if (s.isClickable === false) {
+                                              return <span key={s.id || i}>{s.text}</span>;
+                                            }
+                                            const isCorrect = (highlightConfig.correctHighlights || []).includes(s.id);
+                                            return (
+                                              <span
+                                                key={s.id || i}
+                                                onClick={() => {
+                                                  const current = highlightConfig.correctHighlights || [];
+                                                  const newC = isCorrect ? current.filter((id: string) => id !== s.id) : [...current, s.id];
+                                                  
+                                                  const newText = row.sentences.map((rs: any) => {
+                                                    if (rs.isClickable === false) return rs.text;
+                                                    if (newC.includes(rs.id)) return `[*${rs.text}]`;
+                                                    return `[${rs.text}]`;
+                                                  }).join("");
+                                                  
+                                                  const ta = document.getElementById(`row-editor-${row.id}`) as HTMLTextAreaElement;
+                                                  if (ta) {
+                                                    const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")?.set;
+                                                    nativeSetter?.call(ta, newText);
+                                                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "px-1 py-0.5 mx-[1px] rounded cursor-pointer transition-colors inline-block",
+                                                  isCorrect ? "bg-success/20 text-success-foreground border-b-2 border-success font-semibold" : "font-bold text-primary bg-primary/10 border border-primary/20 hover:bg-primary/20"
+                                                )}
+                                              >
+                                                {s.text}
+                                              </span>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 ))}
@@ -1591,6 +1689,9 @@ function CreateQuestion() {
                                           <td className="p-4 font-bold text-slate-800 align-top">{row.label}</td>
                                           <td className="p-4 leading-relaxed align-top">
                                             {row.sentences?.map((s: any, i: number) => {
+                                              if (s.isClickable === false) {
+                                                return <span key={s.id}>{s.text}</span>;
+                                              }
                                               const isCorrect = (highlightConfig.correctHighlights || []).includes(s.id);
                                               return (
                                                 <span key={s.id}>
@@ -1657,24 +1758,7 @@ function CreateQuestion() {
                                     
                                     const processPlain = (plain: string) => {
                                       if (!plain) return;
-                                      const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
-                                      let pLast = 0;
-                                      let pMatch;
-                                      while ((pMatch = splitRegex.exec(plain)) !== null) {
-                                        if (pMatch.index > pLast) {
-                                          const prePre = plain.substring(pLast, pMatch.index);
-                                          if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
-                                          else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
-                                        }
-                                        parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
-                                        if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
-                                        pLast = splitRegex.lastIndex;
-                                      }
-                                      if (pLast < plain.length) {
-                                        const leftover = plain.substring(pLast);
-                                        if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
-                                        else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
-                                      }
+                                      parsedSentences.push({ id: `text-${clickIndex++}`, text: plain, isClickable: false });
                                     };
                                     
                                     while ((match = bracketRegex.exec(newText)) !== null) {
@@ -1727,24 +1811,7 @@ function CreateQuestion() {
                                     
                                     const processPlain = (plain: string) => {
                                       if (!plain) return;
-                                      const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
-                                      let pLast = 0;
-                                      let pMatch;
-                                      while ((pMatch = splitRegex.exec(plain)) !== null) {
-                                        if (pMatch.index > pLast) {
-                                          const prePre = plain.substring(pLast, pMatch.index);
-                                          if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
-                                          else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
-                                        }
-                                        parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
-                                        if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
-                                        pLast = splitRegex.lastIndex;
-                                      }
-                                      if (pLast < plain.length) {
-                                        const leftover = plain.substring(pLast);
-                                        if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
-                                        else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
-                                      }
+                                      parsedSentences.push({ id: `text-${clickIndex++}`, text: plain, isClickable: false });
                                     };
                                     
                                     while ((match = bracketRegex.exec(newText)) !== null) {
@@ -1789,24 +1856,7 @@ function CreateQuestion() {
                               
                               const processPlain = (plain: string) => {
                                 if (!plain) return;
-                                const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
-                                let pLast = 0;
-                                let pMatch;
-                                while ((pMatch = splitRegex.exec(plain)) !== null) {
-                                  if (pMatch.index > pLast) {
-                                    const prePre = plain.substring(pLast, pMatch.index);
-                                    if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
-                                    else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
-                                  }
-                                  parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
-                                  if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
-                                  pLast = splitRegex.lastIndex;
-                                }
-                                if (pLast < plain.length) {
-                                  const leftover = plain.substring(pLast);
-                                  if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
-                                  else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
-                                }
+                                parsedSentences.push({ id: `text-${clickIndex++}`, text: plain, isClickable: false });
                               };
                               
                               while ((match = bracketRegex.exec(text)) !== null) {
@@ -1839,17 +1889,28 @@ function CreateQuestion() {
                             placeholder="e.g. The patient presented with [*severe headache] and [nausea]."
                             className="w-full min-h-[150px] rounded-lg border border-border p-3 text-sm bg-background resize-y outline-none focus:border-primary"
                           />
+                          
+                          {highlightConfig.sentences && highlightConfig.sentences.length > 0 && (
+                            <div className="mt-4 p-4 bg-muted/30 border border-border rounded-lg text-[14px] leading-relaxed text-foreground">
+                              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 256 256"><path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.48c.35.79,8.82,19.58,27.65,38.41C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.35c18.83-18.83,27.3-37.62,27.65-38.41A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"></path></svg>
+                                Live Preview
+                              </span>
+                              {highlightConfig.sentences.map((s: any, i: number) => (
+                                <span key={i} className={s.isClickable ? "font-bold text-primary bg-primary/10 px-1 rounded mx-0.5 border border-primary/20" : ""}>
+                                  {s.text}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {highlightConfig.sentences && highlightConfig.sentences.filter((s: any) => s.isClickable).length > 0 ? (
                           <div className="space-y-2 pt-4 border-t border-border">
                             <label className="text-sm font-semibold text-foreground">Select Correct Highlights</label>
                             <p className="text-xs text-muted-foreground">You can also click the phrases below to toggle their correct state in the text above.</p>
-                            <div className="bg-card p-4 rounded-xl border border-border leading-relaxed text-[14px]">
-                              {highlightConfig.sentences.map((sentence: any) => {
-                                if (!sentence.isClickable) {
-                                  return <span key={sentence.id}>{sentence.text}</span>;
-                                }
+                            <div className="bg-card p-4 rounded-xl border border-border flex flex-wrap gap-2 text-[14px]">
+                              {highlightConfig.sentences.filter((s: any) => s.isClickable).map((sentence: any) => {
                                 const isCorrect = (highlightConfig.correctHighlights || []).includes(sentence.id);
                                 return (
                                   <span
@@ -1873,24 +1934,7 @@ function CreateQuestion() {
                                       
                                       const processPlain = (plain: string) => {
                                         if (!plain) return;
-                                        const splitRegex = /([^.!?]+[.!?]+)(\s*)/g;
-                                        let pLast = 0;
-                                        let pMatch;
-                                        while ((pMatch = splitRegex.exec(plain)) !== null) {
-                                          if (pMatch.index > pLast) {
-                                            const prePre = plain.substring(pLast, pMatch.index);
-                                            if (prePre.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: prePre, isClickable: true });
-                                            else parsedSentences.push({ id: `text-${pLast}-pre`, text: prePre, isClickable: false });
-                                          }
-                                          parsedSentences.push({ id: `click-${clickIndex++}`, text: pMatch[1], isClickable: true });
-                                          if (pMatch[2]) parsedSentences.push({ id: `text-${clickIndex}-sp`, text: pMatch[2], isClickable: false });
-                                          pLast = splitRegex.lastIndex;
-                                        }
-                                        if (pLast < plain.length) {
-                                          const leftover = plain.substring(pLast);
-                                          if (leftover.trim()) parsedSentences.push({ id: `click-${clickIndex++}`, text: leftover, isClickable: true });
-                                          else parsedSentences.push({ id: `text-${pLast}-left`, text: leftover, isClickable: false });
-                                        }
+                                        parsedSentences.push({ id: `text-${clickIndex++}`, text: plain, isClickable: false });
                                       };
 
                                       while ((match = bracketRegex.exec(newText)) !== null) {
