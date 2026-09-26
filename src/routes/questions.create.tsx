@@ -2165,7 +2165,10 @@ function CreateQuestion() {
           {/* Step nav */}
           <div className="flex items-center justify-between rounded-2xl border border-border bg-card p-4">
             <button
-              onClick={() => setStep(Math.max(1, step - 1))}
+              onClick={() => {
+                setStep(Math.max(1, step - 1));
+                document.getElementById('main-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
               disabled={step === 1}
               className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-4 py-2 text-sm font-medium disabled:opacity-40"
             >
@@ -2225,6 +2228,7 @@ function CreateQuestion() {
                     }
                   }
                   setStep(step + 1);
+                  document.getElementById('main-scroll-container')?.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
                 className="inline-flex items-center gap-1.5 rounded-full bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground"
               >

@@ -225,7 +225,7 @@ export function RootLayout({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Main */}
-      <div className="flex flex-1 flex-col overflow-y-auto scroll-smooth">
+      <div id="main-scroll-container" className="flex flex-1 flex-col overflow-y-auto scroll-smooth">
         <header className="sticky top-0 z-10 flex flex-col gap-4 border-b border-white/30 bg-white/30 px-6 py-5 backdrop-blur-md xl:flex-row xl:items-center transform-gpu">
           <div className="min-w-0 flex-1">
             <h1 className="truncate text-2xl font-bold tracking-tight text-foreground">{layout.title}</h1>
