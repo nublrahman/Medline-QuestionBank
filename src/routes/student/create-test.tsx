@@ -43,16 +43,19 @@ export default function StudentCreateTest() {
       return;
     }
     async function fetchQuestionCount() {
-      const { data: sessions } = await supabase.from('test_sessions').select('id').eq('student_id', user?.id);
-      const sessionIds = sessions?.map((s: any) => s.id) || [];
-      
       let seenIds: string[] = [];
       let incorrectIds: string[] = [];
-      if (sessionIds.length > 0) {
-        const { data: answers } = await supabase.from('test_answers').select('question_id, is_correct').in('session_id', sessionIds);
-        if (answers) {
-          seenIds = Array.from(new Set(answers.map((a: any) => a.question_id)));
-          incorrectIds = Array.from(new Set(answers.filter((a: any) => !a.is_correct).map((a: any) => a.question_id)));
+      
+      if (user?.id) {
+        const { data: sessions } = await supabase.from('test_sessions').select(`
+          id,
+          test_answers ( question_id, is_correct )
+        `).eq('student_id', user.id);
+        
+        if (sessions) {
+          const allAnswers = sessions.flatMap((s: any) => s.test_answers || []);
+          seenIds = Array.from(new Set(allAnswers.map((a: any) => a.question_id)));
+          incorrectIds = Array.from(new Set(allAnswers.filter((a: any) => !a.is_correct).map((a: any) => a.question_id)));
         }
       }
 
