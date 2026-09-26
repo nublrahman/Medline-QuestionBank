@@ -43,17 +43,23 @@ const renderOptionsPreview = (q: any) => {
     if (type === "next-gen-cloze") return q.clozeBlanks ? { blanks: q.clozeBlanks } : q.options;
     if (type === "table") return q.tableConfig || q.options;
     if (type === "next-gen-highlight") return q.highlightConfig || q.options;
+    
+    // For MCQ questions, options might be an array, or an object { mcq_options: [...] }
+    if (q.options && !Array.isArray(q.options) && q.options.mcq_options) {
+      return q.options.mcq_options;
+    }
+    
     return q.options;
   };
 
   const opts = getOpts(q.type);
 
-  if (q.type?.startsWith("mcq")) {
-    return opts?.map((o: any) => (
-      <div key={o.letter} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", o.correct ? "border-success/40 bg-success/5" : "border-border")}>
-        <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold shrink-0">{o.letter}</div>
+  if (q.type?.startsWith("mcq") || q.type === "traditional") {
+    return opts?.map((o: any, idx: number) => (
+      <div key={o.letter || o.id || idx} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", (o.correct || o.isCorrect) ? "border-success/40 bg-success/5" : "border-border")}>
+        <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold shrink-0">{o.letter || o.id || String.fromCharCode(65 + idx)}</div>
         <span className="flex-1 break-words min-w-0">{o.text}</span>
-        {o.correct && <Check className="ml-auto size-4 text-success-foreground" />}
+        {(o.correct || o.isCorrect) && <Check className="ml-auto size-4 text-success-foreground" />}
       </div>
     ));
   }
