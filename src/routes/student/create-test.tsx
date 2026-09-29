@@ -95,20 +95,8 @@ export default function StudentCreateTest() {
         });
       }
       if (type === "mixed") {
-        filtered = filtered.filter(q => {
-          if (q.group_type === "grouped") {
-            const subs = q.options?.subQuestions || [];
-            if (!subs || subs.length === 0) return false;
-            const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
-            const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
-            return hasTrad && hasNgn;
-          }
-          // Mixed mode should only show grouped questions with BOTH? 
-          // Wait, the user said "when i make grouped question with both it should be viewed in the mixed mode".
-          // In standard logic, "Mixed Mode" means it includes everything. Or does it mean it ONLY includes Mixed grouped questions + ungrouped traditional & NGN?
-          // Let's assume it means "Any question is fine, so just return true".
-          return true;
-        });
+        // Mixed mode includes all questions (Traditional, NGN, and any Grouped questions).
+        // No type filtering is needed.
       }
       if (status === "new") filtered = filtered.filter(q => !seenIds.includes(q.id));
       if (status === "review") filtered = filtered.filter(q => seenIds.includes(q.id));
