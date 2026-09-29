@@ -113,8 +113,8 @@ export default function StudentCreateTest() {
       if (status === "new") filtered = filtered.filter(q => !seenIds.includes(q.id));
       if (status === "review") filtered = filtered.filter(q => seenIds.includes(q.id));
       const trueItemCount = filtered.reduce((acc, q) => {
-        if (q.group_type === "grouped" && q.options?.subQuestions) {
-          return acc + q.options.subQuestions.length;
+        if (q.group_type === "grouped") {
+          return acc + (q.options?.subQuestions?.length || 0);
         }
         return acc + 1;
       }, 0);

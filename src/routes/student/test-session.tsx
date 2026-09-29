@@ -170,7 +170,13 @@ export default function StudentTestSession() {
           }
           if (config.type === "mixed") {
             pool = pool.filter((q: any) => {
-              // Mixed mode allows all questions, including mixed grouped questions
+              if (q.group_type === "grouped") {
+                const subs = q.options?.subQuestions || [];
+                if (!subs || subs.length === 0) return false;
+                const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
+                const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+                return hasTrad && hasNgn;
+              }
               return true;
             });
           }
@@ -184,8 +190,8 @@ export default function StudentTestSession() {
             for (const q of pool) {
               if (itemCount >= config.count) break;
               selectedParents.push(q);
-              if (q.group_type === "grouped" && q.options?.subQuestions) {
-                itemCount += q.options.subQuestions.length;
+              if (q.group_type === "grouped") {
+                itemCount += (q.options?.subQuestions?.length || 0);
               } else {
                 itemCount += 1;
               }
