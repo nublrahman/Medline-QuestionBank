@@ -367,15 +367,16 @@ function CategoriesPage() {
                             ) : subQuestions.length > 0 ? (
                               <div className="space-y-2">
                                 {subQuestions.map(q => {
-                                  return (
-                                    <div key={q.id} onClick={() => setPreviewQuestion(q)} className="cursor-pointer rounded-lg border border-border bg-background p-3 hover:border-primary/40 transition-colors">
-                                      <div className="mb-1 flex items-center justify-between">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{q.type.replace(/-/g, ' ')}</span>
-                                        <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", q.is_published ? "bg-success/15 text-success-foreground" : "bg-warning/15 text-warning-foreground")}>{q.is_published ? "published" : "draft"}</span>
-                                      </div>
-                                      <div className="line-clamp-2 text-xs text-foreground font-medium">{stemText || "(No question text)"}</div>
-                                    </div>
-                                  );
+                                      const stemText = (q.stem || "").replace(/<[^>]+>/g, '').trim();
+                                      return (
+                                        <div key={q.id} onClick={() => setPreviewQuestion(q)} className="cursor-pointer rounded-lg border border-border bg-background p-3 hover:border-primary/40 transition-colors">
+                                          <div className="mb-1 flex items-center justify-between">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{q.type.replace(/-/g, ' ')}</span>
+                                            <span className={cn("text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full", q.is_published ? "bg-success/15 text-success-foreground" : "bg-warning/15 text-warning-foreground")}>{q.is_published ? "published" : "draft"}</span>
+                                          </div>
+                                          <div className="line-clamp-2 text-xs text-foreground font-medium">{stemText || "(No question text)"}</div>
+                                        </div>
+                                      );
                                 })}
                                 {subQuestions.length === 50 && <div className="text-center text-xs text-muted-foreground pt-2">Showing latest 50 questions</div>}
                               </div>
