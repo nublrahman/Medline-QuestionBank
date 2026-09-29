@@ -334,7 +334,10 @@ function CategoriesPage() {
                     key={s} 
                     className="group flex flex-col rounded-xl border border-border bg-background overflow-hidden"
                   >
-                    <div className="flex items-center gap-3 p-3">
+                    <div 
+                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-muted/10 transition-colors"
+                      onClick={() => toggleSub(s, active.name)}
+                    >
                       <div className="grid size-8 place-items-center rounded-lg bg-muted text-xs font-semibold">{String((subPage - 1) * SUBCATEGORY_PAGE_SIZE + i + 1).padStart(2, "0")}</div>
                       <div className="flex-1">
                         <div className="font-medium">{s}</div>
@@ -343,7 +346,6 @@ function CategoriesPage() {
                       <motion.button onClick={(e) => openEdit('subcategory', s, s, e)} whileTap={{ scale: 0.90 }} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><PenSquare className="size-4" /></motion.button>
                       <motion.button onClick={(e) => openDelete('subcategory', null, s, e)} whileTap={{ scale: 0.90 }} className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-destructive"><Trash2 className="size-4" /></motion.button>
                       <motion.button 
-                        onClick={() => toggleSub(s, active.name)} 
                         whileTap={{ scale: 0.90 }} 
                         className="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
                       >
@@ -464,7 +466,7 @@ function CategoriesPage() {
         </AlertDialogContent>
       </AlertDialog>
       <Dialog open={!!previewQuestion} onOpenChange={(open) => !open && setPreviewQuestion(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Question Preview</DialogTitle>
             <DialogDescription>
@@ -477,7 +479,7 @@ function CategoriesPage() {
                 className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
                 dangerouslySetInnerHTML={{ 
                   __html: previewQuestion.type === "next-gen-cloze" 
-                    ? (previewQuestion.stem || "").replace(/{(?:dropdown\s+)?([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                    ? (previewQuestion.stem || "").replace(/{(?:dropdown\s+)?[0-9]+}/gi, '_________')
                     : (previewQuestion.stem || "") 
                 }} 
               />

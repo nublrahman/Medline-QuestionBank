@@ -220,16 +220,39 @@ function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
                  onClick={() => setActiveTab(i)}
                  className={cn("px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors", activeTab === i ? "border-b-2 border-primary text-primary bg-background" : "text-muted-foreground hover:bg-muted/50")}
                >
-                 {t.tabName}
+                 {t.tabName || t.title || "Tab"}
                </button>
              ))}
           </div>
           <div className="p-5 overflow-y-auto max-h-[500px]">
              {scenarioTabs[activeTab] && (
-                <div 
-                  className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem]" 
-                  dangerouslySetInnerHTML={{ __html: scenarioTabs[activeTab].content || "" }} 
-                />
+               scenarioTabs[activeTab].type === "table" ? (
+                 <div className="overflow-x-auto rounded-lg border border-border">
+                   <table className="w-full text-left text-sm border-collapse">
+                     <thead className="bg-muted/40">
+                       <tr>
+                         {scenarioTabs[activeTab].tableHeaders?.map((h: string, idx: number) => (
+                           <th key={idx} className="p-2 border-b border-border font-semibold text-muted-foreground">{h}</th>
+                         ))}
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-border">
+                       {scenarioTabs[activeTab].tableRows?.map((row: any) => (
+                         <tr key={row.id} className="hover:bg-muted/20">
+                           {row.cells?.map((cell: string, idx: number) => (
+                             <td key={idx} className={cn("p-2 border-border", idx === 0 && "font-medium border-r")}>{cell}</td>
+                           ))}
+                         </tr>
+                       ))}
+                     </tbody>
+                   </table>
+                 </div>
+               ) : (
+                 <div 
+                   className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem]" 
+                   dangerouslySetInnerHTML={{ __html: scenarioTabs[activeTab].content || "" }} 
+                 />
+               )
              )}
           </div>
         </div>
@@ -245,7 +268,7 @@ function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
                   className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
                   dangerouslySetInnerHTML={{ 
                     __html: sq.type === "next-gen-cloze" 
-                      ? (sq.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                      ? (sq.stem || "").replace(/{(?:dropdown\s+)?[0-9]+}/gi, '_________')
                       : (sq.stem || "") 
                   }} 
                 />
@@ -271,7 +294,7 @@ function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
               className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem] mb-6" 
               dangerouslySetInnerHTML={{ 
                 __html: previewQuestion.type === "next-gen-cloze" 
-                  ? (previewQuestion.stem || "").replace(/{([0-9]+)}/g, '<span class="inline-flex items-center justify-center bg-teal-50 text-teal-700 border border-teal-200 px-2 py-0.5 rounded text-[11px] font-bold mx-1 align-middle whitespace-nowrap">Blank $1</span>')
+                  ? (previewQuestion.stem || "").replace(/{(?:dropdown\s+)?[0-9]+}/gi, '_________')
                   : (previewQuestion.stem || "") 
               }} 
             />
@@ -644,7 +667,7 @@ function PreviousQuestions() {
       </div>
 
       <Dialog open={!!previewQuestion} onOpenChange={(open) => !open && setPreviewQuestion(null)}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Question Preview</DialogTitle>
             <DialogDescription>

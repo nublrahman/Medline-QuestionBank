@@ -119,18 +119,18 @@ export default function StudentTestSession() {
 
         const { data, error } = await query;
         
-        // Fetch user history to support "new" and "review" modes
-        const { data: sessions } = await supabase.from('test_sessions').select('id').eq('student_id', user?.id);
-        const sessionIds = sessions?.map((s: any) => s.id) || [];
+        const { data: sessions } = await supabase.from('test_sessions').select(`
+          id,
+          test_answers ( question_id, is_correct )
+        `).eq('student_id', user?.id);
         
         let seenIds: string[] = [];
         let incorrectIds: string[] = [];
-        if (sessionIds.length > 0) {
-          const { data: answers } = await supabase.from('test_answers').select('question_id, is_correct').in('session_id', sessionIds);
-          if (answers) {
-            seenIds = Array.from(new Set(answers.map((a: any) => a.question_id)));
-            incorrectIds = Array.from(new Set(answers.filter((a: any) => !a.is_correct).map((a: any) => a.question_id)));
-          }
+        
+        if (sessions) {
+          const allAnswers = sessions.flatMap((s: any) => s.test_answers || []);
+          seenIds = Array.from(new Set(allAnswers.map((a: any) => (a.question_id || '').replace(/-sub-\d+$/, ''))));
+          incorrectIds = Array.from(new Set(allAnswers.filter((a: any) => !a.is_correct).map((a: any) => (a.question_id || '').replace(/-sub-\d+$/, ''))));
         }
         
         if (!error && data) {
@@ -139,20 +139,39 @@ export default function StudentTestSession() {
           if (config.status === "new" && seenIds.length > 0) {
             pool = pool.filter((q: any) => !seenIds.includes(q.id));
           } else if (config.status === "review") {
+            pool = pool.filter((q: any) => seenIds.includes(q.id));
+          } else if (config.status === "incorrect") {
             pool = pool.filter((q: any) => incorrectIds.includes(q.id));
           }
 
-          if (config.type === "traditional") pool = pool.filter((q: any) => q.type.startsWith("mcq") && q.group_type !== "grouped");
+          if (config.type === "traditional") {
+            pool = pool.filter((q: any) => {
+              if (q.group_type === "grouped") {
+                const subs = q.options?.subQuestions || [];
+                if (!subs || subs.length === 0) return false;
+                const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
+                const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+                return hasTrad && !hasNgn;
+              }
+              return q.type.startsWith("mcq");
+            });
+          }
           if (config.type === "next-gen") {
             pool = pool.filter((q: any) => {
               if (q.group_type === "grouped") {
                 const subs = q.options?.subQuestions || [];
-                const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq") || s.type === "traditional");
-                const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq") && s.type !== "traditional");
-                if (hasTrad && hasNgn) return false;
-                return true;
+                if (!subs || subs.length === 0) return false;
+                const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
+                const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+                return hasNgn && !hasTrad;
               }
               return !q.type.startsWith("mcq");
+            });
+          }
+          if (config.type === "mixed") {
+            pool = pool.filter((q: any) => {
+              // Mixed mode allows all questions, including mixed grouped questions
+              return true;
             });
           }
           
@@ -165,7 +184,11 @@ export default function StudentTestSession() {
             for (const q of pool) {
               if (itemCount >= config.count) break;
               selectedParents.push(q);
-              itemCount += (q.group_type === "grouped" ? (q.options?.subQuestions?.length || 1) : 1);
+              if (q.group_type === "grouped" && q.options?.subQuestions) {
+                itemCount += q.options.subQuestions.length;
+              } else {
+                itemCount += 1;
+              }
             }
             pool = selectedParents;
           }
@@ -190,7 +213,7 @@ export default function StudentTestSession() {
                   correctId: rawOptions ? rawOptions.find((o: any) => o.correct)?.letter : null,
                   correctIds: rawOptions ? rawOptions.filter((o: any) => o.correct).map((o: any) => o.letter) : [],
                   options: rawOptions ? rawOptions.map((o: any) => ({ id: o.letter, text: o.text })) : sub.options,
-                  scenario_tabs: migrateScenarioTabs(sub.scenario_tabs || scenario_tabs),
+                  scenario_tabs: migrateScenarioTabs((sub.scenario_tabs && sub.scenario_tabs.length > 0) ? sub.scenario_tabs : scenario_tabs),
                   is_subquestion: true,
                   sub_index: idx,
                   sub_total: subQuestions.length
@@ -312,15 +335,17 @@ export default function StudentTestSession() {
         });
       }
       case "table": {
-        const rowCount = activeQuestion.options?.rows?.length || 0;
-        if (activeQuestion.options?.multiSelect) {
+        const config = activeQuestion.tableConfig || activeQuestion.options || {};
+        const rowCount = config.rows?.length || 0;
+        if (config.multiSelect) {
           return Object.keys(answerState).filter(k => Array.isArray(answerState[k]) && answerState[k].length > 0).length === rowCount;
         }
         return Object.keys(answerState).length === rowCount;
       }
       case "bowtie": {
-        const expectedActs = activeQuestion.options?.actions?.filter((x: any) => x.isCorrect).length || 2;
-        const expectedParams = activeQuestion.options?.parameters?.filter((x: any) => x.isCorrect).length || 2;
+        const config = activeQuestion.bowtieConfig || activeQuestion.options || {};
+        const expectedActs = config.actions?.filter((x: any) => x.isCorrect).length || 2;
+        const expectedParams = config.parameters?.filter((x: any) => x.isCorrect).length || 2;
         return (answerState.actions?.filter(Boolean).length === expectedActs) && (answerState.parameters?.filter(Boolean).length === expectedParams);
       }
       case "next-gen-order": return true; // Can submit any order
@@ -341,16 +366,18 @@ export default function StudentTestSession() {
       case "next-gen-cloze": {
         return Object.entries(activeQuestion.options?.blanks || {}).every(([key, blank]) => (blank as any).correct === answerState[key]);
       }
-      case "table":
-        if (activeQuestion.options?.multiSelect) {
-          return Object.entries(activeQuestion.options?.correctAnswers || {}).every(([rowId, colIds]: [string, any]) => {
+      case "table": {
+        const config = activeQuestion.tableConfig || activeQuestion.options || {};
+        if (config.multiSelect) {
+          return Object.entries(config.correctAnswers || {}).every(([rowId, colIds]: [string, any]) => {
             const ansIds = answerState[rowId] || [];
             return Array.isArray(colIds) && ansIds.length === colIds.length && ansIds.every((id: string) => colIds.includes(id));
           });
         }
-        return Object.entries(activeQuestion.options?.correctAnswers || {}).every(([rowId, colId]) => answerState[rowId] === colId);
+        return Object.entries(config.correctAnswers || {}).every(([rowId, colId]) => answerState[rowId] === colId);
+      }
       case "bowtie": {
-        const opts = activeQuestion.options || {};
+        const opts = activeQuestion.bowtieConfig || activeQuestion.options || {};
         const correctActs = opts.actions?.filter((a: any) => a.isCorrect).map((a: any) => a.text) || [];
         const correctParams = opts.parameters?.filter((p: any) => p.isCorrect).map((p: any) => p.text) || [];
         
@@ -489,6 +516,11 @@ export default function StudentTestSession() {
   };
 
   const progressPercent = activePool.length > 0 ? Math.round(((currentIndex + 1) / activePool.length) * 100) : 0;
+
+  const uniqueParentIds = Array.from(new Set(activePool.map(q => q.parent_id || q.id)));
+  const currentParentId = activeQuestion?.parent_id || activeQuestion?.id;
+  const currentQuestionNumber = uniqueParentIds.indexOf(currentParentId) + 1;
+  const totalQuestions = uniqueParentIds.length;
 
   if (loading) return <StudentLayout title="Loading..."><div className="p-8">Loading questions...</div></StudentLayout>;
   if (!activeQuestion) return <StudentLayout title="No Questions"><div className="p-8">No questions found for this test.</div></StudentLayout>;
@@ -761,7 +793,8 @@ export default function StudentTestSession() {
 
   const renderMatrix = () => {
     const answers = answerState || {};
-    const correctAns = activeQuestion.options?.correctAnswers || {};
+    const config = activeQuestion.tableConfig || activeQuestion.options || {};
+    const correctAns = config.correctAnswers || {};
 
     return (
       <div className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -769,15 +802,15 @@ export default function StudentTestSession() {
           <thead className="bg-muted/50 text-muted-foreground">
             <tr>
               <th className="p-4 font-semibold">Assessment Finding</th>
-              {activeQuestion.options?.columns?.map((c: any) => <th key={c.id} className="p-4 text-center font-semibold">{c.label}</th>)}
+              {config.columns?.map((c: any) => <th key={c.id} className="p-4 text-center font-semibold">{c.label}</th>)}
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {activeQuestion.options?.rows?.map((r: any) => (
+            {config.rows?.map((r: any) => (
               <tr key={r.id}>
                 <td className="p-4 font-medium text-foreground">{r.text}</td>
-                {activeQuestion.options?.columns?.map((c: any) => {
-                  const isMulti = activeQuestion.options?.multiSelect;
+                {config.columns?.map((c: any) => {
+                  const isMulti = config.multiSelect;
                   const isSelected = isMulti ? (answers[r.id] || []).includes(c.id) : answers[r.id] === c.id;
                   const isExpected = isMulti ? (correctAns[r.id] || []).includes(c.id) : correctAns[r.id] === c.id;
                   let bgClass = "";
@@ -819,24 +852,25 @@ export default function StudentTestSession() {
 
   const renderHighlight = () => {
     const selected = (answerState || []) as string[];
+    const config = activeQuestion.highlightConfig || activeQuestion.options || {};
     const toggle = (id: string) => {
       if (selected.includes(id)) setAnswerState(selected.filter(x => x !== id));
       else setAnswerState([...selected, id]);
     };
 
-    let tables = activeQuestion.options?.tables;
-    if (activeQuestion.options?.layout === "table" && !tables && activeQuestion.options?.tableRows) {
+    let tables = config.tables;
+    if (config.layout === "table" && !tables && config.tableRows) {
       tables = [{
         id: "default",
-        tabName: activeQuestion.options.tableTabName || "History and Physical",
-        headers: activeQuestion.options.tableHeaders || { col1: "Body System", col2: "Findings" },
-        rows: activeQuestion.options.tableRows
+        tabName: config.tableTabName || "History and Physical",
+        headers: config.tableHeaders || { col1: "Body System", col2: "Findings" },
+        rows: config.tableRows
       }];
     }
 
     return (
       <div className="space-y-4">
-        {activeQuestion.options?.layout === "table" ? (
+        {config.layout === "table" ? (
           <div className="flex flex-col mt-4">
             <div className="flex border-b border-slate-300 gap-1 overflow-x-auto">
               {(tables || []).map((t: any, idx: number) => (
@@ -871,7 +905,7 @@ export default function StudentTestSession() {
                         <td className="p-4 leading-relaxed align-top">
                           {row.sentences?.map((s: any, i: number) => {
                             const isSelected = selected.includes(s.id);
-                            const isExpected = activeQuestion.options?.correctHighlights?.includes(s.id);
+                            const isExpected = config.correctHighlights?.includes(s.id);
                             let highlightClass = "bg-transparent hover:bg-yellow-100 dark:hover:bg-yellow-900/50 cursor-pointer transition-colors";
                             if (isSubmitted) {
                               if (isSelected && isExpected) highlightClass = "bg-success/30 border-b-2 border-success font-semibold";
@@ -904,13 +938,13 @@ export default function StudentTestSession() {
           </div>
         ) : (
           <div className="space-y-2 text-[14px] leading-relaxed text-slate-800">
-            {activeQuestion.options?.sentences?.map((s: any, i: number) => {
+            {config.sentences?.map((s: any, i: number) => {
               if (s.isClickable === false) {
                  return <span key={s.id}>{s.text}</span>;
               }
 
               const isSelected = selected.includes(s.id);
-              const isExpected = activeQuestion.options?.correctHighlights?.includes(s.id);
+              const isExpected = config.correctHighlights?.includes(s.id);
               
               let highlightClass = "bg-transparent hover:bg-yellow-100 dark:hover:bg-yellow-900/50 cursor-pointer transition-colors";
               if (isSubmitted) {
@@ -930,7 +964,7 @@ export default function StudentTestSession() {
                   >
                     {s.text}
                   </span>
-                  {s.isClickable === undefined && i < (activeQuestion.options?.sentences?.length || 0) - 1 && " "}
+                  {s.isClickable === undefined && i < (config.sentences?.length || 0) - 1 && " "}
                 </span>
               );
             })}
@@ -992,8 +1026,8 @@ export default function StudentTestSession() {
     const correctConditions = config.conditions?.filter((c: any) => c.isCorrect) || [];
     const correctParameters = config.parameters?.filter((c: any) => c.isCorrect) || [];
     
-    const actionSlotCount = Math.max(2, correctActions.length);
-    const paramSlotCount = Math.max(2, correctParameters.length);
+    const actionSlotCount = Math.max(1, correctActions.length);
+    const paramSlotCount = Math.max(1, correctParameters.length);
     
     const handleDragEnd = (event: any) => {
       const { active, over } = event;
@@ -1004,6 +1038,26 @@ export default function StudentTestSession() {
       const targetSlot = over.id;
 
       if (!word) return;
+
+      let sourceDomain = "";
+      if (sourceType.startsWith("bank-")) {
+        sourceDomain = sourceType.replace("bank-", "");
+        if (sourceDomain === "conditions") sourceDomain = "condition";
+      } else {
+        sourceDomain = sourceType.split("-")[0];
+      }
+
+      let targetDomain = "";
+      if (targetSlot.startsWith("bank-")) {
+        targetDomain = targetSlot.replace("bank-", "");
+        if (targetDomain === "conditions") targetDomain = "condition";
+      } else {
+        targetDomain = targetSlot.split("-")[0];
+      }
+
+      if (sourceDomain !== targetDomain) {
+        return;
+      }
 
       const newState = { actions: [...(state.actions || [])], condition: state.condition, parameters: [...(state.parameters || [])] } as any;
 
@@ -1302,9 +1356,14 @@ export default function StudentTestSession() {
   };
 
   const renderHeader = () => {
-    let contentHTML = activeQuestion.type === "next-gen-cloze" && !activeQuestion.is_subquestion 
-      ? "Complete the statement" 
-      : activeQuestion.text;
+    let contentHTML = "";
+    if (activeQuestion.is_subquestion) {
+      contentHTML = activeQuestion.parent_stem || "";
+    } else {
+      contentHTML = activeQuestion.type === "next-gen-cloze" 
+        ? "Complete the statement" 
+        : activeQuestion.text;
+    }
 
     contentHTML = (contentHTML || "").replace(/{dropdown\s*\d*}/gi, '________');
 
@@ -1315,15 +1374,17 @@ export default function StudentTestSession() {
             Item {activeQuestion.sub_index + 1} of {activeQuestion.sub_total}
           </div>
         ) : (
-          <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question {(currentIndex + 1).toString().padStart(2, '0')}</div>
+          <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question {(currentQuestionNumber).toString().padStart(2, '0')}</div>
         )}
-        <div className="mb-6 flex items-start gap-3">
-          <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
-          <div 
-            className="text-[14px] font-normal leading-relaxed text-slate-800 break-words prose prose-slate prose-sm max-w-none prose-p:my-1"
-            dangerouslySetInnerHTML={{ __html: contentHTML }}
-          />
-        </div>
+        {contentHTML && (
+          <div className="mb-6 flex items-start gap-3">
+            <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
+            <div 
+              className="text-[14px] font-normal leading-relaxed text-slate-800 break-words prose prose-slate prose-sm max-w-none prose-p:my-1"
+              dangerouslySetInnerHTML={{ __html: contentHTML }}
+            />
+          </div>
+        )}
       </>
     );
   };
@@ -1409,7 +1470,7 @@ export default function StudentTestSession() {
               <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
               <div 
                 className="text-[14px] font-normal leading-relaxed text-slate-800 break-words prose prose-slate prose-sm max-w-none prose-p:my-1"
-                dangerouslySetInnerHTML={{ __html: activeQuestion.text }}
+                dangerouslySetInnerHTML={{ __html: (activeQuestion.text || "").replace(/{(?:dropdown\s+)?[0-9]+}/gi, "_________") }}
               />
             </div>
           )}
@@ -1425,7 +1486,7 @@ export default function StudentTestSession() {
               <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
               <div 
                 className="text-[14px] font-normal leading-relaxed text-slate-800 break-words prose prose-slate prose-sm max-w-none prose-p:my-1"
-                dangerouslySetInnerHTML={{ __html: activeQuestion.text }}
+                dangerouslySetInnerHTML={{ __html: (activeQuestion.text || "").replace(/{(?:dropdown\s+)?[0-9]+}/gi, "_________") }}
               />
             </div>
           )}
@@ -1599,7 +1660,7 @@ export default function StudentTestSession() {
               <X className="size-4" weight="bold" />
             </button>
             <div className="text-[15px] font-semibold text-slate-900 hidden md:block">
-              Question {currentIndex + 1} of {activePool.length}
+              Question {currentQuestionNumber} of {totalQuestions}
             </div>
             <span className="rounded-full bg-teal-50 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-teal-700 md:ml-2">
               {activeQuestion.type === "next-gen-cloze" ? "Fill in the Blank" : activeQuestion.type.replace(/-/g, " ")}

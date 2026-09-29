@@ -54,12 +54,12 @@ export default function StudentCreateTest() {
         
         if (sessions) {
           const allAnswers = sessions.flatMap((s: any) => s.test_answers || []);
-          seenIds = Array.from(new Set(allAnswers.map((a: any) => a.question_id)));
-          incorrectIds = Array.from(new Set(allAnswers.filter((a: any) => !a.is_correct).map((a: any) => a.question_id)));
+          seenIds = Array.from(new Set(allAnswers.map((a: any) => (a.question_id || '').replace(/-sub-\d+$/, ''))));
+          incorrectIds = Array.from(new Set(allAnswers.filter((a: any) => !a.is_correct).map((a: any) => (a.question_id || '').replace(/-sub-\d+$/, ''))));
         }
       }
 
-      let query = supabase.from('questions').select('id, type')
+      let query = supabase.from('questions').select('id, type, group_type, options')
         .in('category', activeCategoryNames)
         .eq('is_published', true);
       
@@ -70,12 +70,55 @@ export default function StudentCreateTest() {
       const { data } = await query;
       let filtered = data || [];
       
-      if (type === "traditional") filtered = filtered.filter(q => q.type.startsWith('mcq'));
-      if (type === "next-gen") filtered = filtered.filter(q => !q.type.startsWith('mcq'));
+      if (type === "traditional") {
+        filtered = filtered.filter(q => {
+          if (q.group_type === "grouped") {
+            const subs = q.options?.subQuestions || [];
+            if (!subs || subs.length === 0) return false;
+            const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
+            const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+            return hasTrad && !hasNgn;
+          }
+          return q.type.startsWith('mcq');
+        });
+      }
+      if (type === "next-gen") {
+        filtered = filtered.filter(q => {
+          if (q.group_type === "grouped") {
+            const subs = q.options?.subQuestions || [];
+            if (!subs || subs.length === 0) return false;
+            const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
+            const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+            return hasNgn && !hasTrad;
+          }
+          return !q.type.startsWith('mcq');
+        });
+      }
+      if (type === "mixed") {
+        filtered = filtered.filter(q => {
+          if (q.group_type === "grouped") {
+            const subs = q.options?.subQuestions || [];
+            if (!subs || subs.length === 0) return false;
+            const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
+            const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+            return hasTrad && hasNgn;
+          }
+          // Mixed mode should only show grouped questions with BOTH? 
+          // Wait, the user said "when i make grouped question with both it should be viewed in the mixed mode".
+          // In standard logic, "Mixed Mode" means it includes everything. Or does it mean it ONLY includes Mixed grouped questions + ungrouped traditional & NGN?
+          // Let's assume it means "Any question is fine, so just return true".
+          return true;
+        });
+      }
       if (status === "new") filtered = filtered.filter(q => !seenIds.includes(q.id));
-      if (status === "review") filtered = filtered.filter(q => incorrectIds.includes(q.id));
-
-      setAvailableQuestionsCount(filtered.length);
+      if (status === "review") filtered = filtered.filter(q => seenIds.includes(q.id));
+      const trueItemCount = filtered.reduce((acc, q) => {
+        if (q.group_type === "grouped" && q.options?.subQuestions) {
+          return acc + q.options.subQuestions.length;
+        }
+        return acc + 1;
+      }, 0);
+      setAvailableQuestionsCount(trueItemCount);
     }
     fetchQuestionCount();
   }, [subjects, refinements, status, type, user]);

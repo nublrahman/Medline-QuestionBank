@@ -36,7 +36,7 @@ export default function StudentTestHistory() {
           id,
           created_at,
           completed_at,
-          test_answers ( id, is_correct, questions ( category, type ) )
+          test_answers ( id, is_correct, questions ( category, type, group_type, options ) )
         `)
         .eq('student_id', user.id)
         .not('completed_at', 'is', null)
@@ -58,8 +58,20 @@ export default function StudentTestHistory() {
               if (uniqueCategories.length > 0) {
                 category = uniqueCategories.join(', ');
               }
-              const hasTraditional = answers.some((a: any) => a.questions?.type?.startsWith('mcq') || a.questions?.type === 'traditional');
-              const hasNextGen = answers.some((a: any) => a.questions?.type && !a.questions?.type?.startsWith('mcq') && a.questions?.type !== 'traditional');
+              const hasTraditional = answers.some((a: any) => {
+                if (a.questions?.group_type === "grouped") {
+                  const subs = a.questions.options?.subQuestions || [];
+                  return subs.some((s: any) => s.type?.startsWith("mcq"));
+                }
+                return a.questions?.type?.startsWith('mcq') || a.questions?.type === 'traditional';
+              });
+              const hasNextGen = answers.some((a: any) => {
+                if (a.questions?.group_type === "grouped") {
+                  const subs = a.questions.options?.subQuestions || [];
+                  return subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
+                }
+                return a.questions?.type && !a.questions?.type?.startsWith('mcq') && a.questions?.type !== 'traditional';
+              });
               
               if (hasTraditional && hasNextGen) type = "Mixed Mode";
               else if (hasTraditional) type = "Traditional";
