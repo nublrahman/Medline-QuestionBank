@@ -873,8 +873,17 @@ function CreateQuestion() {
                       Item {idx + 1}
                       <X className="size-3 hover:text-destructive transition-colors" onClick={(e) => { 
                         e.stopPropagation(); 
-                        setSubQuestions(prev => prev.filter((__, i) => i !== idx)); 
-                        if(activeSubIndex === idx) switchSubQuestion(-1); 
+                        const newSubs = subQuestions.filter((_, i) => i !== idx);
+                        if (activeSubIndex === idx) {
+                          setStem(parentStem);
+                          setTabs(parentTabs);
+                          setIncludeTabs(parentIncludeTabs);
+                          setType("mcq-single");
+                          setActiveSubIndex(-1);
+                        } else if (activeSubIndex > idx) {
+                          setActiveSubIndex(activeSubIndex - 1);
+                        }
+                        setSubQuestions(newSubs);
                       }} />
                     </button>
                   ))}
