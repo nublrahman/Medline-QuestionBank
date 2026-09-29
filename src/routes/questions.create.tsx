@@ -2359,6 +2359,7 @@ function CreateQuestion() {
                           type, stem, options, bowtieConfig, tableConfig, clozeBlanks, clozeDependencies, highlightConfig, rationale
                         };
                       }
+                      setSubQuestions(currentSubs);
                       itemsToValidate = currentSubs;
                       if (itemsToValidate.length === 0) {
                          toast.error("Grouped questions must have at least one item.");
