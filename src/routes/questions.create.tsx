@@ -851,7 +851,7 @@ function CreateQuestion() {
               {group === "grouped" && (
                 <>
                   <Section title="Common Case Scenario" desc="This stem applies to all items in this group.">
-                    <div className={cn("rounded-xl border transition-colors", isEmpty(parentStem) ? "border-destructive ring-1 ring-destructive/20" : "border-transparent")}>
+                    <div className="rounded-xl border border-transparent transition-colors">
                       <RichTextEditor value={parentStem} onChange={setParentStem} />
                     </div>
                   </Section>
@@ -931,7 +931,7 @@ function CreateQuestion() {
                     </Section>
                   )}
                   <Section title={group === "grouped" ? "Question Stem (Item Specific)" : "Question Stem"}>
-                    <div className={cn("rounded-xl border transition-colors", isEmpty(stem) ? "border-destructive ring-1 ring-destructive/20" : "border-transparent")}>
+                    <div className="rounded-xl border border-transparent transition-colors">
                       <RichTextEditor
                         value={stem}
                   onChange={(val) => {
@@ -980,7 +980,7 @@ function CreateQuestion() {
                           value={o.text}
                           onChange={(e) => setOptions(options.map((x, idx) => (idx === i ? { ...x, text: e.target.value } : x)))}
                           placeholder={`Option ${o.letter}`}
-                          className={cn("flex-1 bg-transparent text-sm outline-none px-2 py-1 rounded border transition-colors", o.text.trim() === "" ? "border-destructive" : "border-transparent")}
+                          className="flex-1 bg-transparent text-sm outline-none px-2 py-1 rounded border border-transparent transition-colors"
                         />
                         <label className={cn("flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold transition", o.correct ? "bg-success/15 text-success-foreground" : "bg-muted text-muted-foreground")}>
                           <input
@@ -1116,7 +1116,7 @@ function CreateQuestion() {
                         </div>
                         <div className="space-y-3">
                           {blank.options.map((opt, i) => (
-                            <div key={i} className={cn("flex items-center gap-3 rounded-xl border p-2 transition-colors", blank.correct === opt && opt !== "" ? "border-success/50 bg-success/5" : opt.trim() === "" ? "border-destructive ring-1 ring-destructive/20 bg-destructive/5" : "border-border bg-card")}>
+                            <div key={i} className={cn("flex items-center gap-3 rounded-xl border p-2 transition-colors", blank.correct === opt && opt !== "" ? "border-success/50 bg-success/5" : "border-border bg-card")}>
                               <input
                                 value={opt}
                                 onChange={(e) => {
@@ -1279,7 +1279,7 @@ function CreateQuestion() {
                                 setTableConfig({ ...tableConfig, columns: newCols });
                               }}
                               placeholder="Column Name"
-                              className={cn("bg-transparent text-sm outline-none px-1 font-semibold border-b", col.label.trim() === "" ? "border-destructive" : "border-transparent")}
+                              className="bg-transparent text-sm outline-none px-1 font-semibold border-b border-transparent"
                             />
                             <button
                               onClick={() => {
@@ -1345,7 +1345,7 @@ function CreateQuestion() {
                                       setTableConfig({ ...tableConfig, rows: newRows });
                                     }}
                                     placeholder="e.g. Assessment Finding"
-                                    className={cn("w-full bg-transparent text-sm outline-none px-2 py-1 border rounded", row.text.trim() === "" ? "border-destructive" : "border-transparent focus:border-border")}
+                                    className="w-full bg-transparent text-sm outline-none px-2 py-1 border rounded border-transparent focus:border-border"
                                   />
                                 </td>
                                 {tableConfig.columns.map((col: any) => (
@@ -1463,7 +1463,7 @@ function CreateQuestion() {
                                   setHighlightConfig({...highlightConfig, tables: newTables});
                                 }}
                                 placeholder="e.g. History & Physical"
-                                className={cn("bg-background shadow-sm font-semibold border-border focus-visible:ring-primary h-9 text-sm", highlightConfig.tables[activeHighlightTab].tabName.trim() === "" && "border-destructive border-2")}
+                                className="bg-background shadow-sm font-semibold border-border focus-visible:ring-primary h-9 text-sm"
                               />
                             </div>
 
@@ -1483,7 +1483,7 @@ function CreateQuestion() {
                                           setHighlightConfig({...highlightConfig, tables: newTables});
                                         }}
                                         placeholder="e.g. Body System"
-                                        className={cn("bg-transparent shadow-none font-semibold text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all", highlightConfig.tables[activeHighlightTab].headers.col1.trim() === "" ? "border-destructive border" : "border-transparent")}
+                                        className="bg-transparent shadow-none font-semibold text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all border-transparent"
                                       />
                                     </th>
                                     <th className="p-2 border-b border-border font-semibold text-muted-foreground align-top relative group">
@@ -1498,7 +1498,7 @@ function CreateQuestion() {
                                           setHighlightConfig({...highlightConfig, tables: newTables});
                                         }}
                                         placeholder="e.g. Findings"
-                                        className={cn("bg-transparent shadow-none font-semibold text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all", highlightConfig.tables[activeHighlightTab].headers.col2.trim() === "" ? "border-destructive border" : "border-transparent")}
+                                        className="bg-transparent shadow-none font-semibold text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all border-transparent"
                                       />
                                     </th>
                                     <th className="border-b border-border w-[50px]"></th>
@@ -1516,7 +1516,7 @@ function CreateQuestion() {
                                             setHighlightConfig({...highlightConfig, tables: newTables});
                                           }}
                                           placeholder="e.g. Assessment Finding"
-                                          className={cn("bg-transparent shadow-none text-foreground font-medium hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all", row.label.trim() === "" ? "border-destructive border" : "border-transparent")}
+                                          className="bg-transparent shadow-none text-foreground font-medium hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all border-transparent"
                                         />
                                       </td>
                                       <td className="p-3 align-top border-border">
@@ -1673,7 +1673,7 @@ function CreateQuestion() {
                                         const newC = (highlightConfig.correctHighlights || []).filter(id => !removedSentenceIds.includes(id));
                                         setHighlightConfig({...highlightConfig, tables: newTables, correctHighlights: newC});
                                       }}
-                                      className="inline-grid size-8 place-items-center rounded-md text-muted-foreground opacity-30 group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all mx-auto"
+                                      className="inline-grid size-8 place-items-center rounded-md text-muted-foreground opacity-30 group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all mx-auto"
                                     >
                                       <Trash2 className="size-4" />
                                     </button>
@@ -2050,7 +2050,7 @@ function CreateQuestion() {
               )}
 
               <Section title="Explanation & Rationale" desc="Provide evidence-based reasoning with images">
-                <div className={cn("rounded-xl border transition-colors", isEmpty(rationale) ? "border-destructive ring-1 ring-destructive/20" : "border-transparent")}>
+                <div className="rounded-xl border border-transparent transition-colors">
                   <RichTextEditor
                     value={rationale}
                     onChange={setRationale}
@@ -2538,7 +2538,7 @@ function ScenarioTabsEditor({
                   <input
                     value={t.title}
                     onChange={(e) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, title: e.target.value } : x)))}
-                    className={cn("flex-1 bg-transparent text-[16px] outline-none font-bold text-foreground placeholder:text-muted-foreground placeholder:font-normal transition-all pb-0.5", t.title.trim() === "" ? "border-b-2 border-destructive" : "focus:border-b-2 focus:border-primary")}
+                    className="flex-1 bg-transparent text-[16px] outline-none font-bold text-foreground placeholder:text-muted-foreground placeholder:font-normal transition-all pb-0.5 focus:border-b-2 focus:border-primary border-b-2 border-transparent"
                     placeholder="Enter tab title (e.g. Patient Info)"
                   />
                   <select
@@ -2554,12 +2554,12 @@ function ScenarioTabsEditor({
                     const newTabs = tabs.filter((_, idx) => idx !== i);
                     setTabs(newTabs);
                     if (newTabs.length === 0) setIncludeTabs(false);
-                  }} className="grid size-9 place-items-center rounded-xl border border-transparent text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all">
+                  }} className="grid size-9 place-items-center rounded-xl border border-transparent text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-all">
                     <Trash2 className="size-4.5" />
                   </button>
                 </div>
                 {(!t.type || t.type === "text") ? (
-                  <div className={cn("mt-2 rounded-xl overflow-hidden border shadow-sm", isEmpty(t.content) ? "border-destructive" : "border-border")}>
+                  <div className="mt-2 rounded-xl overflow-hidden border shadow-sm border-border">
                     <RichTextEditor
                       value={t.content}
                       onChange={(content) => setTabs(tabs.map((x, idx) => (idx === i ? { ...x, content } : x)))}
@@ -2591,7 +2591,7 @@ function ScenarioTabsEditor({
                                 value={header} 
                                 onChange={(e) => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableHeaders: x.tableHeaders!.map((h: any, idx2: number) => idx2 === hIdx ? e.target.value : h) } : x))}
                                  
-                                className={cn("bg-transparent border-transparent shadow-none font-semibold text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all", header.trim() === "" && "border-destructive border")}
+                                className="bg-transparent border-transparent shadow-none font-semibold text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all"
                               />
                             </th>
                           ))}
@@ -2621,14 +2621,14 @@ function ScenarioTabsEditor({
                                     ...x, 
                                     tableRows: x.tableRows?.map((r: any) => r.id === row.id ? { ...r, cells: r.cells.map((c: any, idx2: number) => idx2 === cIdx ? e.target.value : c) } : r) 
                                   } : x))}
-                                  className={cn("bg-transparent border-transparent shadow-none text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all", cell.trim() === "" && "border-destructive border")}
+                                  className="bg-transparent border-transparent shadow-none text-foreground hover:border-border focus-visible:ring-primary focus-visible:bg-background h-8 text-sm px-2 w-full transition-all"
                                 />
                               </td>
                             ))}
                             <td className="p-1.5 align-middle text-center w-[50px]">
                               <button 
                                 onClick={() => setTabs(tabs.map((x, idx) => idx === i ? { ...x, tableRows: x.tableRows?.filter((r: any) => r.id !== row.id) } : x))} 
-                                className="inline-grid size-7 place-items-center rounded-md text-muted-foreground opacity-30 group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/20 transition-all"
+                                className="inline-grid size-7 place-items-center rounded-md text-muted-foreground opacity-30 group-hover/row:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
                               >
                                 <Trash2 className="size-4" />
                               </button>
