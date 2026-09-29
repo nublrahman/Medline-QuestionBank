@@ -2104,6 +2104,7 @@ function CreateQuestion() {
                                key={i}
                                onClick={() => setPreviewTabIdx(i)}
                                className={cn("px-5 py-3 text-sm font-semibold whitespace-nowrap transition-colors", previewTabIdx === i ? "border-b-2 border-primary text-primary bg-background" : "text-muted-foreground hover:bg-muted/50 border-b-2 border-transparent")}
+                             >
                                {tab.title || "Untitled Tab"}
                              </button>
                           ))}
