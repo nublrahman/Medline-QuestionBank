@@ -521,10 +521,9 @@ export default function StudentTestSession() {
     navigate("/student");
   };
 
-  const progressPercent = activePool.length > 0 ? Math.round(((currentIndex + 1) / activePool.length) * 100) : 0;
-
-  const currentQuestionNumber = currentIndex + 1;
-  const totalQuestions = activePool.length;
+  const currentQuestionNumber = new Set(activePool.slice(0, currentIndex + 1).map(q => q.parent_id || q.id)).size;
+  const totalQuestions = new Set(activePool.map(q => q.parent_id || q.id)).size;
+  const progressPercent = totalQuestions > 0 ? Math.round((currentQuestionNumber / totalQuestions) * 100) : 0;
 
   if (loading) return <StudentLayout title="Loading..."><div className="p-8">Loading questions...</div></StudentLayout>;
   if (!activeQuestion) return <StudentLayout title="No Questions"><div className="p-8">No questions found for this test.</div></StudentLayout>;
