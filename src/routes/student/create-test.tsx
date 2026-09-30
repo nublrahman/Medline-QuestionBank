@@ -95,11 +95,11 @@ export default function StudentCreateTest() {
         });
       }
       if (type === "mixed") {
-        // Mixed mode includes all questions (Traditional, NGN, and any Grouped questions).
-        // No type filtering is needed.
+        // No filtering needed. Include all questions.
       }
       if (status === "new") filtered = filtered.filter(q => !seenIds.includes(q.id));
       if (status === "review") filtered = filtered.filter(q => seenIds.includes(q.id));
+      
       const trueItemCount = filtered.length;
       setAvailableQuestionsCount(trueItemCount);
     }
@@ -107,7 +107,8 @@ export default function StudentCreateTest() {
   }, [subjects, refinements, status, type, user]);
 
   const handleStartTest = () => {
-    navigate("/student/test-session", { state: { type, subjects, categoryNames: activeCategoryNames, refinements, status, count } });
+    const finalCount = count === 999 ? availableQuestionsCount : Math.min(count, availableQuestionsCount);
+    navigate("/student/test-session", { state: { type, subjects, categoryNames: activeCategoryNames, refinements, status, count: finalCount } });
   };
 
   return (
@@ -358,7 +359,9 @@ export default function StudentCreateTest() {
               </div>
               <div className="flex justify-between">
                 <span className="text-sm text-muted-foreground">Count</span>
-                <span className="text-sm font-medium">{count === 999 ? "All" : count} Questions</span>
+                <span className="text-sm font-medium">
+                  {count === 999 ? availableQuestionsCount : Math.min(count, availableQuestionsCount)} Questions
+                </span>
               </div>
               
               <div className="my-6 h-px w-full bg-border" />

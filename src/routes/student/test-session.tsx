@@ -10,7 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export function migrateScenarioTabs(tabs: any[]): any[] {
-  if (!tabs) return [];
+  if (!tabs || !Array.isArray(tabs)) return [];
   return tabs.map(tab => {
     if (tab.type === "table") {
       let newHeaders = tab.tableHeaders;
@@ -134,7 +134,7 @@ export default function StudentTestSession() {
         }
         
         if (!error && data) {
-          let pool = data;
+          let pool = [...data];
           
           if (config.status === "new" && seenIds.length > 0) {
             pool = pool.filter((q: any) => !seenIds.includes(q.id));
@@ -169,16 +169,7 @@ export default function StudentTestSession() {
             });
           }
           if (config.type === "mixed") {
-            pool = pool.filter((q: any) => {
-              if (q.group_type === "grouped") {
-                const subs = q.options?.subQuestions || [];
-                if (!subs || subs.length === 0) return false;
-                const hasTrad = subs.some((s: any) => s.type?.startsWith("mcq"));
-                const hasNgn = subs.some((s: any) => s.type && !s.type.startsWith("mcq"));
-                return hasTrad && hasNgn;
-              }
-              return true;
-            });
+            // No filtering needed. Include all questions.
           }
           
           // Randomize parent questions
@@ -190,11 +181,7 @@ export default function StudentTestSession() {
             for (const q of pool) {
               if (itemCount >= config.count) break;
               selectedParents.push(q);
-              if (q.group_type === "grouped") {
-                itemCount += (q.options?.subQuestions?.length || 0);
-              } else {
-                itemCount += 1;
-              }
+              itemCount += 1;
             }
             pool = selectedParents;
           }
