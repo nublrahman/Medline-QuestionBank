@@ -2154,7 +2154,7 @@ function CreateQuestion() {
                   )}
 
                   <div className={cn("w-full flex flex-col gap-6", (group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0 && "md:w-1/2")}>
-                    {(group === "grouped" ? (subQuestions.length > 0 ? [subQuestions[previewSubIndex]] : []) : [{ type, stem, options, bowtieConfig, clozeBlanks, highlightConfig, rationale, category, subcategory }]).map((q: any, _mappedIdx: number, arr: any[]) => {
+                    {(group === "grouped" ? (subQuestions.length > 0 ? [subQuestions[previewSubIndex]] : []) : [{ type, stem, options, bowtieConfig, tableConfig, clozeBlanks, highlightConfig, rationale, category, subcategory }]).map((q: any, _mappedIdx: number, arr: any[]) => {
                       const idx = group === "grouped" ? previewSubIndex : 0;
                       return (
                       <div key={idx} className="w-full bg-background/80 backdrop-blur-md rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all duration-300">
@@ -2209,6 +2209,34 @@ function CreateQuestion() {
                                        ))}
                                     </div>
                                  </div>
+                              </div>
+                            </div>
+                          ) : (q?.type === "table" || q?.type === "next-gen-matrix") ? (
+                            <div className="rounded-xl border border-border bg-card overflow-hidden">
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-left text-sm border-collapse">
+                                  <thead className="bg-muted/50 text-muted-foreground">
+                                    <tr>
+                                      <th className="p-4 font-semibold border-b border-border min-w-[150px]">Assessment Finding</th>
+                                      {q?.tableConfig?.columns?.map((c: any) => <th key={c.id} className="p-4 text-center font-semibold border-b border-border">{c.label}</th>)}
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {q?.tableConfig?.rows?.map((r: any) => (
+                                      <tr key={r.id}>
+                                        <td className="p-4 font-medium text-foreground">{r.text}</td>
+                                        {q?.tableConfig?.columns?.map((c: any) => {
+                                          const isExpected = q?.tableConfig?.multiSelect ? (q?.tableConfig?.correctAnswers?.[r.id] || []).includes(c.id) : q?.tableConfig?.correctAnswers?.[r.id] === c.id;
+                                          return (
+                                            <td key={c.id} className={cn("p-4 text-center transition-colors", isExpected ? "bg-success/20 ring-1 ring-inset ring-success/50" : "")}>
+                                              <input type={q?.tableConfig?.multiSelect ? "checkbox" : "radio"} readOnly checked={isExpected} className="size-5 cursor-pointer accent-primary opacity-90" />
+                                            </td>
+                                          );
+                                        })}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
                               </div>
                             </div>
                           ) : q?.type === "next-gen-cloze" ? (

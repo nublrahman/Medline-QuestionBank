@@ -1334,7 +1334,6 @@ export default function StudentTestSession() {
       case "next-gen-order": return renderOrder();
       case "next-gen-highlight": return (
         <div className="rounded-2xl border border-border bg-card p-8 shadow-sm">
-          <h2 className="mb-6 text-sm font-bold uppercase tracking-widest text-muted-foreground">Electronic Health Record</h2>
           {renderHighlight()}
         </div>
       );
