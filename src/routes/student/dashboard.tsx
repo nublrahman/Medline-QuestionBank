@@ -74,8 +74,9 @@ export default function StudentDashboard() {
           score: Math.round((stats.correct / stats.total) * 100)
         })).sort((a, b) => b.score - a.score);
         
-        setStrongestTopics(catArray.slice(0, 3));
-        setNeedsImprovement(catArray.slice(-3).reverse().filter(c => !setStrongestTopics.includes(c))); // filter out overlap if few categories
+        const top3 = catArray.slice(0, 3);
+        setStrongestTopics(top3);
+        setNeedsImprovement(catArray.slice(-3).reverse().filter(c => !top3.some(t => t.name === c.name))); // filter out overlap if few categories
       }
       setLoading(false);
     }

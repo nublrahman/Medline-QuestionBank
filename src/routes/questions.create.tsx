@@ -160,9 +160,9 @@ function CreateQuestion() {
   const [previewTabIdx, setPreviewTabIdx] = useState(0);
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [bowtieConfig, setBowtieConfig] = useState<any>({
-    actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-    conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-    parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
+    actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
+    conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }],
+    parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
   });
   const [tableConfig, setTableConfig] = useState<any>({
     columns: [{ id: "col-1", label: "Improved" }, { id: "col-2", label: "Declined" }],
@@ -248,9 +248,9 @@ function CreateQuestion() {
       setStem(targetSub.stem || "");
       setOptions(targetSub.options || [{ letter: "A", text: "", correct: false }, { letter: "B", text: "", correct: false }, { letter: "C", text: "", correct: false }, { letter: "D", text: "", correct: false }]);
       setBowtieConfig(targetSub.bowtieConfig || {
-        actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-        conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-        parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
+        actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
+        conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }],
+        parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
       });
       setTableConfig(targetSub.tableConfig || { columns: [{ id: "col-1", label: "Improved" }, { id: "col-2", label: "Declined" }], rows: [{ id: "row-1", text: "" }, { id: "row-2", text: "" }], correctAnswers: {}, multiSelect: false });
       setClozeBlanks(targetSub.clozeBlanks || { "1": { options: ["", "", ""], correct: "" } });
@@ -300,9 +300,9 @@ function CreateQuestion() {
           }
 
           setBowtieConfig(qData.options || {
-            actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-            conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-            parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
+            actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
+            conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }],
+            parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
           });
           setTableConfig(qData.options || { columns: [{ id: "col-1", label: "Improved" }, { id: "col-2", label: "Declined" }], rows: [{ id: "row-1", text: "" }, { id: "row-2", text: "" }], correctAnswers: {}, multiSelect: false });
           setClozeBlanks(qData.options?.blanks || { "1": { options: ["", "", ""], correct: "" } });
@@ -376,9 +376,9 @@ function CreateQuestion() {
         setSubQuestions([]);
         setActiveSubIndex(-1);
         setBowtieConfig({
-          actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-          conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
-          parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
+          actions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }],
+          conditions: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }],
+          parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
         });
         setTableConfig({ columns: [{ id: "col-1", label: "Improved" }, { id: "col-2", label: "Declined" }], rows: [{ id: "row-1", text: "" }, { id: "row-2", text: "" }], correctAnswers: {}, multiSelect: false });
         setClozeBlanks({ "1": { options: ["", "", ""], correct: "" } });
@@ -1032,10 +1032,10 @@ function CreateQuestion() {
                           <input 
                             value={bowtieConfig.actionLabel || "Causes / Assessments"} 
                             onChange={(e) => setBowtieConfig({ ...bowtieConfig, actionLabel: e.target.value })} 
-                            className={cn("w-full text-center text-xs font-bold uppercase text-muted-foreground bg-transparent border-b hover:border-border focus:border-primary outline-none transition-colors pb-1", (bowtieConfig.actionLabel ?? "").trim() === "" ? "border-destructive" : "border-transparent")}
+                            className={cn("w-full text-center text-xs font-bold uppercase text-muted-foreground bg-transparent border-b hover:border-border focus:border-primary outline-none transition-colors pb-1", "border-transparent")}
                           />
                           {bowtieConfig.actions.map((item: any, i: number) => (
-                            <div key={i} className={cn("flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm transition-colors", item.isCorrect ? "border-success/50 ring-1 ring-success/20" : item.text.trim() === "" ? "border-destructive ring-1 ring-destructive/20" : "border-border")}>
+                            <div key={i} className={cn("flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm transition-colors", item.isCorrect ? "border-success/50 ring-1 ring-success/20" : "border-border")}>
                               <textarea value={item.text} onChange={(e) => { 
                                 const n = [...bowtieConfig.actions]; n[i] = { ...n[i], text: e.target.value }; setBowtieConfig({ ...bowtieConfig, actions: n }); 
                                 e.target.style.height = '0px'; e.target.style.height = `${e.target.scrollHeight}px`;
@@ -1054,10 +1054,10 @@ function CreateQuestion() {
                           <input 
                             value={bowtieConfig.conditionLabel || "Core Condition"} 
                             onChange={(e) => setBowtieConfig({ ...bowtieConfig, conditionLabel: e.target.value })} 
-                            className={cn("w-full text-center text-xs font-bold uppercase text-muted-foreground bg-transparent border-b hover:border-border focus:border-primary outline-none transition-colors pb-1", (bowtieConfig.conditionLabel ?? "").trim() === "" ? "border-destructive" : "border-transparent")}
+                            className={cn("w-full text-center text-xs font-bold uppercase text-muted-foreground bg-transparent border-b hover:border-border focus:border-primary outline-none transition-colors pb-1", "border-transparent")}
                           />
                           {bowtieConfig.conditions.map((item: any, i: number) => (
-                            <div key={i} className={cn("flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm transition-colors", item.isCorrect ? "border-success/50 ring-1 ring-success/20" : item.text.trim() === "" ? "border-destructive ring-1 ring-destructive/20" : "border-border")}>
+                            <div key={i} className={cn("flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm transition-colors", item.isCorrect ? "border-success/50 ring-1 ring-success/20" : "border-border")}>
                               <textarea value={item.text} onChange={(e) => { 
                                 const n = [...bowtieConfig.conditions]; n[i] = { ...n[i], text: e.target.value }; setBowtieConfig({ ...bowtieConfig, conditions: n }); 
                                 e.target.style.height = '0px'; e.target.style.height = `${e.target.scrollHeight}px`;
@@ -1076,10 +1076,10 @@ function CreateQuestion() {
                           <input 
                             value={bowtieConfig.parameterLabel || "Treatments / Effects"} 
                             onChange={(e) => setBowtieConfig({ ...bowtieConfig, parameterLabel: e.target.value })} 
-                            className={cn("w-full text-center text-xs font-bold uppercase text-muted-foreground bg-transparent border-b hover:border-border focus:border-primary outline-none transition-colors pb-1", (bowtieConfig.parameterLabel ?? "").trim() === "" ? "border-destructive" : "border-transparent")}
+                            className={cn("w-full text-center text-xs font-bold uppercase text-muted-foreground bg-transparent border-b hover:border-border focus:border-primary outline-none transition-colors pb-1", "border-transparent")}
                           />
                           {bowtieConfig.parameters.map((item: any, i: number) => (
-                            <div key={i} className={cn("flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm transition-colors", item.isCorrect ? "border-success/50 ring-1 ring-success/20" : item.text.trim() === "" ? "border-destructive ring-1 ring-destructive/20" : "border-border")}>
+                            <div key={i} className={cn("flex items-center gap-2 rounded-lg border bg-card p-2 shadow-sm transition-colors", item.isCorrect ? "border-success/50 ring-1 ring-success/20" : "border-border")}>
                               <textarea value={item.text} onChange={(e) => { 
                                 const n = [...bowtieConfig.parameters]; n[i] = { ...n[i], text: e.target.value }; setBowtieConfig({ ...bowtieConfig, parameters: n }); 
                                 e.target.style.height = '0px'; e.target.style.height = `${e.target.scrollHeight}px`;
@@ -1424,7 +1424,7 @@ function CreateQuestion() {
                           <button
                             onClick={() => {
                               const newTables = [...(highlightConfig.tables || [])];
-                              newTables.push({ id: `t-${Math.random().toString(36).substring(7)}`, tabName: `Tab ${newTables.length + 1}`, headers: { col1: "Body System", col2: "Findings" }, rows: [] });
+                              newTables.push({ id: `t-${Math.random().toString(36).substring(7)}`, tabName: "", headers: { col1: "Body System", col2: "Findings" }, rows: [] });
                               setHighlightConfig({ ...highlightConfig, tables: newTables });
                               setActiveHighlightTab(newTables.length - 1);
                             }}
@@ -1462,7 +1462,7 @@ function CreateQuestion() {
                                   newTables[activeHighlightTab].tabName = e.target.value;
                                   setHighlightConfig({...highlightConfig, tables: newTables});
                                 }}
-                                placeholder="e.g. History & Physical"
+                                placeholder="Enter tab title (e.g. Patient Info)"
                                 className="bg-background shadow-sm font-semibold border-border focus-visible:ring-primary h-9 text-sm"
                               />
                             </div>
@@ -2098,16 +2098,17 @@ function CreateQuestion() {
                         {category} • {subcategory} ({group === "grouped" ? "Grouped Question" : type})
                       </DialogDescription>
                     </DialogHeader>
-                    <div className={cn("mt-4 rounded-3xl border border-border bg-card/50 p-6 flex flex-col gap-8 shadow-sm", (group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0 && "md:flex-row")}>
+                    <div className={cn("mt-4 rounded-3xl border border-border bg-card/50 p-6 flex flex-col gap-8 shadow-sm", (((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) || (group === "grouped" && !isEmpty(parentStem))) && "md:flex-row")}>
                   
-                  {((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) && (
+                  {(((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) || (group === "grouped" && !isEmpty(parentStem))) && (
                     <div className="w-full md:w-1/2 flex flex-col gap-5">
                       {group === "grouped" && !isEmpty(parentStem) && (
                         <div className="prose prose-sm dark:prose-invert max-w-none text-[15px] leading-relaxed text-foreground bg-background/80 p-5 rounded-2xl border border-border shadow-sm" dangerouslySetInnerHTML={{ __html: parentStem }} />
                       )}
                       
-                      <div className="flex flex-col rounded-2xl border border-border bg-background overflow-hidden shadow-sm">
-                        <div className="flex overflow-x-auto border-b border-border bg-muted/30 [&::-webkit-scrollbar]:hidden">
+                      {((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) && (
+                        <div className="flex flex-col rounded-2xl border border-border bg-background overflow-hidden shadow-sm">
+                          <div className="flex overflow-x-auto border-b border-border bg-muted/30 [&::-webkit-scrollbar]:hidden">
                           {(group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).map((tab: any, i: number) => (
                              <button
                                key={i}
@@ -2150,10 +2151,11 @@ function CreateQuestion() {
                           })()}
                         </div>
                       </div>
+                      )}
                     </div>
                   )}
 
-                  <div className={cn("w-full flex flex-col gap-6", (group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0 && "md:w-1/2")}>
+                  <div className={cn("w-full flex flex-col gap-6", ((((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) || (group === "grouped" && !isEmpty(parentStem)))) && "md:w-1/2")}>
                     {(group === "grouped" ? (subQuestions.length > 0 ? [subQuestions[previewSubIndex]] : []) : [{ type, stem, options, bowtieConfig, tableConfig, clozeBlanks, highlightConfig, rationale, category, subcategory }]).map((q: any, _mappedIdx: number, arr: any[]) => {
                       const idx = group === "grouped" ? previewSubIndex : 0;
                       return (
@@ -2255,7 +2257,16 @@ function CreateQuestion() {
                             </div>
                           ) : q?.type === "next-gen-highlight" && (
                             <div className="space-y-6">
-                              {q?.highlightConfig?.tables?.map((t: any, i: number) => (
+                              {(() => {
+                                let tables = q?.highlightConfig?.tables;
+                                if (!tables && q?.highlightConfig?.tableRows) {
+                                  tables = [{
+                                    tabName: q?.highlightConfig?.tableTabName || "History and Physical",
+                                    headers: q?.highlightConfig?.tableHeaders || { col1: "Body System", col2: "Findings" },
+                                    rows: q?.highlightConfig?.tableRows
+                                  }];
+                                }
+                                return tables?.map((t: any, i: number) => (
                                  <div key={i} className="border border-border rounded-xl overflow-hidden">
                                    <div className="bg-muted px-4 py-2 font-semibold text-sm border-b">{t.tabName}</div>
                                    <table className="w-full text-sm text-left">
@@ -2268,31 +2279,33 @@ function CreateQuestion() {
                                       <tbody className="divide-y">
                                          {t.rows?.map((r: any, ri: number) => (
                                             <tr key={ri} className="bg-card">
-                                              <td className="px-4 py-3 font-medium align-top max-w-[200px] break-words">{r.rowLabel}</td>
+                                              <td className="px-4 py-3 font-medium align-top max-w-[200px] break-words">{r.label || r.rowLabel}</td>
                                               <td className="px-4 py-3 align-top">
-                                                 {r.sentences?.map((s: any) => (
-                                                   <span key={s.id} className={cn("inline rounded px-1", q?.highlightConfig?.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
-                                                     {s.text}{" "}
-                                                   </span>
-                                                 ))}
+                                                 {r.sentences?.map((s: any) => {
+                                                   if (s.isClickable === false) return <span key={s.id}>{s.text} </span>;
+                                                   return (
+                                                     <span key={s.id} className={cn("inline rounded px-1", q?.highlightConfig?.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
+                                                       {s.text}{" "}
+                                                     </span>
+                                                   );
+                                                 })}
                                               </td>
                                             </tr>
                                          ))}
                                       </tbody>
                                    </table>
                                  </div>
-                              ))}
-                              {q?.highlightConfig?.layout === "text" && (
+                              ))})()}
+                              {q?.highlightConfig?.layout === "paragraph" && (
                                  <div className="rounded-xl border border-border p-5 text-sm bg-muted/10 leading-relaxed">
-                                    {q?.highlightConfig?.paragraphs?.map((p: any, pi: number) => (
-                                       <p key={pi} className="mb-4 last:mb-0">
-                                          {p.sentences?.map((s: any) => (
-                                            <span key={s.id} className={cn("inline rounded px-1", q?.highlightConfig?.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
-                                              {s.text}{" "}
-                                            </span>
-                                          ))}
-                                       </p>
-                                    ))}
+                                    {q?.highlightConfig?.sentences?.map((s: any) => {
+                                      if (s.isClickable === false) return <span key={s.id}>{s.text} </span>;
+                                      return (
+                                        <span key={s.id} className={cn("inline rounded px-1", q?.highlightConfig?.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
+                                          {s.text}{" "}
+                                        </span>
+                                      );
+                                    })}
                                  </div>
                               )}
                             </div>
@@ -2680,7 +2693,7 @@ function ScenarioTabsEditor({
               </div>
             ))}
             {tabs.length < 4 && (
-              <button onClick={() => setTabs([...tabs, { title: "New Tab", content: "" }])} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-3 text-sm font-medium text-primary hover:bg-muted">
+              <button onClick={() => setTabs([...tabs, { title: "", content: "" }])} className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border bg-background p-3 text-sm font-medium text-primary hover:bg-muted">
                 <Plus className="size-4" weight="regular" /> Add Tab
               </button>
             )}

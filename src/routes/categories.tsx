@@ -485,7 +485,11 @@ function CategoriesPage() {
                 }} 
               />
               <div className="space-y-2 mb-6">
-                {previewQuestion.type?.startsWith("mcq") ? previewQuestion.options?.map((o: any) => (
+                {previewQuestion.group_type === "grouped" ? (
+                  <div className="rounded-xl border border-border p-4 text-sm bg-muted/20 text-muted-foreground italic">
+                    This is a grouped question (Case Study) containing {previewQuestion.options?.subQuestions?.length || 0} sub-questions.
+                  </div>
+                ) : (previewQuestion.type?.startsWith("mcq") || previewQuestion.type === "traditional") ? (Array.isArray(previewQuestion.options) ? previewQuestion.options : (previewQuestion.options?.mcq_options || []))?.map((o: any) => (
                   <div key={o.letter} className={cn("flex items-center gap-3 rounded-xl border p-3 text-sm", o.correct ? "border-success/40 bg-success/5" : "border-border")}>
                     <div className="grid size-7 place-items-center rounded-lg bg-secondary text-xs font-semibold shrink-0">{o.letter}</div>
                     <span className="flex-1 break-words min-w-0">{o.text}</span>

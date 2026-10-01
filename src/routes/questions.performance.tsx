@@ -56,7 +56,7 @@ function Performance() {
             };
             flagged.push({
               id: id.substring(0, 8),
-              snippet: stripHtml(stat.stem || "").substring(0, 50) + "...",
+              snippet: stripHtml(stat.stem || "").replace(/\{[^}]+\}/g, '______').substring(0, 50) + "...",
               attempts: stat.total,
               accuracy: acc,
               flag: "Low accuracy"

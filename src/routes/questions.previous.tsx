@@ -124,9 +124,17 @@ const renderOptionsPreview = (q: any) => {
   }
   if (q.type === "next-gen-highlight") {
     if (opts?.layout === "table") {
+      let tables = opts.tables;
+      if (!tables && opts.tableRows) {
+        tables = [{
+          tabName: opts.tableTabName || "History and Physical",
+          headers: opts.tableHeaders || { col1: "Body System", col2: "Findings" },
+          rows: opts.tableRows
+        }];
+      }
       return (
         <div className="space-y-6">
-          {opts.tables?.map((t: any, i: number) => (
+          {tables?.map((t: any, i: number) => (
              <div key={i} className="border border-border rounded-xl overflow-hidden">
                <div className="bg-muted px-4 py-2 font-semibold text-sm border-b">{t.tabName}</div>
                <table className="w-full text-sm text-left">
@@ -139,13 +147,16 @@ const renderOptionsPreview = (q: any) => {
                   <tbody className="divide-y">
                      {t.rows?.map((r: any, ri: number) => (
                         <tr key={ri} className="bg-card">
-                          <td className="px-4 py-3 font-medium align-top max-w-[200px] break-words">{r.rowLabel}</td>
+                          <td className="px-4 py-3 font-medium align-top max-w-[200px] break-words">{r.label || r.rowLabel}</td>
                           <td className="px-4 py-3 align-top">
-                             {r.sentences?.map((s: any) => (
-                               <span key={s.id} className={cn("inline rounded px-1", opts.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
-                                 {s.text}{" "}
-                               </span>
-                             ))}
+                             {r.sentences?.map((s: any) => {
+                               if (s.isClickable === false) return <span key={s.id}>{s.text} </span>;
+                               return (
+                                 <span key={s.id} className={cn("inline rounded px-1", opts.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
+                                   {s.text}{" "}
+                                 </span>
+                               );
+                             })}
                           </td>
                         </tr>
                      ))}
@@ -158,11 +169,14 @@ const renderOptionsPreview = (q: any) => {
     } else {
       return (
         <div className="text-sm leading-relaxed bg-muted/10 p-5 rounded-xl border border-border prose prose-sm max-w-none">
-          {opts?.sentences?.map((s: any) => (
-            <span key={s.id} className={cn("inline rounded px-1", opts.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
-              {s.text}{" "}
-            </span>
-          ))}
+          {opts?.sentences?.map((s: any) => {
+            if (s.isClickable === false) return <span key={s.id}>{s.text} </span>;
+            return (
+              <span key={s.id} className={cn("inline rounded px-1", opts.correctHighlights?.includes(s.id) ? "bg-teal-100 text-teal-800 font-bold" : "")}>
+                {s.text}{" "}
+              </span>
+            );
+          })}
         </div>
       );
     }
@@ -211,54 +225,64 @@ function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
 
   return (
     <div className="mt-4 flex flex-col md:flex-row gap-6 items-start">
-      {scenarioTabs && scenarioTabs.length > 0 && (
-        <div className="w-full md:w-1/2 flex flex-col border border-border rounded-2xl overflow-hidden bg-card sticky top-0">
-          <div className="flex overflow-x-auto border-b border-border bg-muted/30">
-             {scenarioTabs.map((t: any, i: number) => (
-               <button
-                 key={i}
-                 onClick={() => setActiveTab(i)}
-                 className={cn("px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors", activeTab === i ? "border-b-2 border-primary text-primary bg-background" : "text-muted-foreground hover:bg-muted/50")}
-               >
-                 {t.tabName || t.title || "Tab"}
-               </button>
-             ))}
-          </div>
-          <div className="p-5 overflow-y-auto max-h-[500px]">
-             {scenarioTabs[activeTab] && (
-               scenarioTabs[activeTab].type === "table" ? (
-                 <div className="overflow-x-auto rounded-lg border border-border">
-                   <table className="w-full text-left text-sm border-collapse">
-                     <thead className="bg-muted/40">
-                       <tr>
-                         {scenarioTabs[activeTab].tableHeaders?.map((h: string, idx: number) => (
-                           <th key={idx} className="p-2 border-b border-border font-semibold text-muted-foreground">{h}</th>
-                         ))}
-                       </tr>
-                     </thead>
-                     <tbody className="divide-y divide-border">
-                       {scenarioTabs[activeTab].tableRows?.map((row: any) => (
-                         <tr key={row.id} className="hover:bg-muted/20">
-                           {row.cells?.map((cell: string, idx: number) => (
-                             <td key={idx} className={cn("p-2 border-border", idx === 0 && "font-medium border-r")}>{cell}</td>
+      {((scenarioTabs && scenarioTabs.length > 0) || (previewQuestion.group_type === "grouped" && previewQuestion.stem)) && (
+        <div className="w-full md:w-1/2 flex flex-col gap-5 sticky top-0">
+          {previewQuestion.group_type === "grouped" && previewQuestion.stem && (
+            <div 
+              className="prose prose-sm dark:prose-invert max-w-none text-[15px] leading-relaxed text-foreground bg-background/80 p-5 rounded-2xl border border-border shadow-sm" 
+              dangerouslySetInnerHTML={{ __html: previewQuestion.stem }} 
+            />
+          )}
+          {scenarioTabs && scenarioTabs.length > 0 && (
+            <div className="flex flex-col border border-border rounded-2xl overflow-hidden bg-card">
+              <div className="flex overflow-x-auto border-b border-border bg-muted/30">
+                 {scenarioTabs.map((t: any, i: number) => (
+                   <button
+                     key={i}
+                     onClick={() => setActiveTab(i)}
+                     className={cn("px-4 py-3 text-sm font-semibold whitespace-nowrap transition-colors", activeTab === i ? "border-b-2 border-primary text-primary bg-background" : "text-muted-foreground hover:bg-muted/50")}
+                   >
+                     {t.tabName || t.title || "Tab"}
+                   </button>
+                 ))}
+              </div>
+              <div className="p-5 overflow-y-auto max-h-[500px]">
+                 {scenarioTabs[activeTab] && (
+                   scenarioTabs[activeTab].type === "table" ? (
+                     <div className="overflow-x-auto rounded-lg border border-border">
+                       <table className="w-full text-left text-sm border-collapse">
+                         <thead className="bg-muted/40">
+                           <tr>
+                             {scenarioTabs[activeTab].tableHeaders?.map((h: string, idx: number) => (
+                               <th key={idx} className="p-2 border-b border-border font-semibold text-muted-foreground">{h}</th>
+                             ))}
+                           </tr>
+                         </thead>
+                         <tbody className="divide-y divide-border">
+                           {scenarioTabs[activeTab].tableRows?.map((row: any) => (
+                             <tr key={row.id} className="hover:bg-muted/20">
+                               {row.cells?.map((cell: string, idx: number) => (
+                                 <td key={idx} className={cn("p-2 border-border", idx === 0 && "font-medium border-r")}>{cell}</td>
+                               ))}
+                             </tr>
                            ))}
-                         </tr>
-                       ))}
-                     </tbody>
-                   </table>
-                 </div>
-               ) : (
-                 <div 
-                   className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem]" 
-                   dangerouslySetInnerHTML={{ __html: scenarioTabs[activeTab].content || "" }} 
-                 />
-               )
-             )}
-          </div>
+                         </tbody>
+                       </table>
+                     </div>
+                   ) : (
+                     <div 
+                       className="prose prose-sm dark:prose-invert max-w-none text-sm leading-[2rem]" 
+                       dangerouslySetInnerHTML={{ __html: scenarioTabs[activeTab].content || "" }} 
+                     />
+                   )
+                 )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      <div className={cn("flex flex-col space-y-6", scenarioTabs && scenarioTabs.length > 0 ? "w-full md:w-1/2" : "w-full")}>
+      <div className={cn("flex flex-col space-y-6", ((scenarioTabs && scenarioTabs.length > 0) || (previewQuestion.group_type === "grouped" && previewQuestion.stem)) ? "w-full md:w-1/2" : "w-full")}>
         {previewQuestion.group_type === "grouped" ? (
           <div className="space-y-8">
             {previewQuestion.options?.subQuestions?.map((sq: any, i: number) => (
@@ -281,12 +305,6 @@ function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
                 </div>
               </div>
             ))}
-            {previewQuestion.rationale && (
-              <div className="mt-5 rounded-xl bg-muted p-4 text-sm overflow-hidden">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Overall Rationale</div>
-                <div className="prose prose-sm dark:prose-invert max-w-none mt-2 break-all" dangerouslySetInnerHTML={{ __html: previewQuestion.rationale || "" }} />
-              </div>
-            )}
           </div>
         ) : (
           <>
@@ -513,7 +531,7 @@ function PreviousQuestions() {
                 <tr key={r.id} className="bg-card hover:bg-muted/40">
                   <td className="p-3 pl-4 font-mono text-xs text-muted-foreground">{(currentPage - 1) * itemsPerPage + i + 1}</td>
                   <td className="p-3">
-                    <div className="font-medium line-clamp-1">{r.stem?.replace(/<[^>]*>?/gm, '').replace(/\{\d+\}/g, '______').substring(0, 50)}...</div>
+                    <div className="font-medium line-clamp-1">{r.stem?.replace(/<[^>]*>?/gm, '').replace(/\{[^}]+\}/g, '______').substring(0, 50)}...</div>
                     <div className="text-xs text-muted-foreground">Updated {new Date(r.created_at).toLocaleDateString()}</div>
                   </td>
                   <td className="p-3 text-center">

@@ -3,6 +3,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { motion, AnimatePresence, Reorder } from "framer-motion";
 import { DndContext, useDraggable, useDroppable, DragOverlay, closestCenter, pointerWithin, useSensor, useSensors, PointerSensor } from "@dnd-kit/core";
+import { restrictToWindowEdges } from "@dnd-kit/modifiers";
 import { X, CaretLeft as ChevronLeft, CaretRight as ChevronRight, CaretDoubleRight, CheckCircle as CheckCircle2, XCircle, DotsSixVertical as GripVertical, BookOpen, Clock } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/lib/supabase";
@@ -49,6 +50,8 @@ export default function StudentTestSession() {
   const [activePool, setActivePool] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [showEndScreen, setShowEndScreen] = useState(false);
+  const [activeDragItem, setActiveDragItem] = useState<{word: string, typeId: string} | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -321,10 +324,11 @@ export default function StudentTestSession() {
       case "mcq-single":
         return typeof answerState === "string";
       case "next-gen-cloze": {
-        const blankIds = Object.keys(activeQuestion.options?.blanks || {});
+        const blanks = activeQuestion.clozeBlanks || activeQuestion.options?.blanks || {};
+        const blankIds = Object.keys(blanks);
         return blankIds.length > 0 && blankIds.every(id => {
           const val = answerState[id];
-          return val && activeQuestion.options?.blanks?.[id]?.options?.includes(val);
+          return val && blanks[id]?.options?.includes(val);
         });
       }
       case "table": {
@@ -357,7 +361,8 @@ export default function StudentTestSession() {
       case "mcq-single":
         return answerState === activeQuestion.correctId;
       case "next-gen-cloze": {
-        return Object.entries(activeQuestion.options?.blanks || {}).every(([key, blank]) => (blank as any).correct === answerState[key]);
+        const blanks = activeQuestion.clozeBlanks || activeQuestion.options?.blanks || {};
+        return Object.entries(blanks).every(([key, blank]) => (blank as any).correct === answerState[key]);
       }
       case "table": {
         const config = activeQuestion.tableConfig || activeQuestion.options || {};
@@ -406,7 +411,7 @@ export default function StudentTestSession() {
       }
       setCurrentIndex(nextIdx);
     } else {
-      if (config.mode !== 'review') handleEndSession();
+      if (config.mode !== 'review') setShowEndScreen(true);
     }
   };
 
@@ -515,6 +520,12 @@ export default function StudentTestSession() {
   if (loading) return <StudentLayout title="Loading..."><div className="p-8">Loading questions...</div></StudentLayout>;
   if (!activeQuestion) return <StudentLayout title="No Questions"><div className="p-8">No questions found for this test.</div></StudentLayout>;
 
+  const isGrouped = activeQuestion.is_subquestion;
+  const groupItems = isGrouped ? activePool.filter((q: any) => q.parent_id === activeQuestion.parent_id).sort((a, b) => a.sub_index - b.sub_index) : [];
+  const isGroupCompleted = isGrouped && groupItems.every((q: any) => q._sessionSubmitted);
+  const showCorrectness = !isGrouped || isGroupCompleted || config.mode === 'review';
+  const shouldShowExplanation = isSubmitted && showCorrectness;
+
   // -------- RENDERERS --------
 
   const renderTraditional = () => {
@@ -522,8 +533,8 @@ export default function StudentTestSession() {
       <div className="space-y-3">
         {activeQuestion.options?.map((option: any, index: number) => {
           const isSelected = answerState === option.id;
-          const showCorrect = isSubmitted && option.id === activeQuestion.correctId;
-          const showIncorrect = isSubmitted && isSelected && !isCorrect;
+          const showCorrect = isSubmitted && showCorrectness && option.id === activeQuestion.correctId;
+          const showIncorrect = isSubmitted && showCorrectness && isSelected && !isCorrect;
           
           const label = String.fromCharCode(65 + index);
 
@@ -534,7 +545,7 @@ export default function StudentTestSession() {
               onClick={() => setAnswerState(option.id)}
               className={cn(
                 "group relative flex w-full items-center justify-between gap-4 rounded-full border p-3 pl-4 text-left transition-all",
-                !isSubmitted && isSelected ? "border-teal-700 bg-teal-50/20 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
+                (!isSubmitted || (!showCorrect && !showIncorrect)) && isSelected ? "border-teal-700 bg-teal-50/20 shadow-sm" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50",
                 showCorrect && "border-green-500 bg-green-50",
                 showIncorrect && "border-red-500 bg-red-50"
               )}
@@ -547,7 +558,7 @@ export default function StudentTestSession() {
                   className="size-4 shrink-0 cursor-pointer accent-teal-700" 
                 />
                 <span className="font-bold text-slate-500 text-[13px]">{label}.</span>
-                <div className={cn("text-[13px] break-words min-w-0 font-medium", (showCorrect || (isSelected && !isSubmitted)) ? "text-slate-900" : "text-slate-700")}>
+                <div className={cn("text-[13px] break-words min-w-0 font-medium", (showCorrect || (isSelected && (!isSubmitted || !showCorrectness))) ? "text-slate-900" : "text-slate-700")}>
                   {option.text}
                 </div>
               </div>
@@ -568,14 +579,14 @@ export default function StudentTestSession() {
 
     return (
       <div className="space-y-2">
-        {activeQuestion.options?.map((option) => {
+        {activeQuestion.options?.map((option: any) => {
           const isSelected = selected.includes(option.id);
           const isExpected = activeQuestion.correctIds?.includes(option.id);
           
           let highlightClass = "";
           let icon = null;
           
-          if (isSubmitted) {
+          if (isSubmitted && showCorrectness) {
             if (isExpected && isSelected) {
               highlightClass = "border-success bg-success/10 ring-1 ring-success/20";
               icon = <CheckCircle2 className="size-4 text-success-foreground" />;
@@ -609,7 +620,7 @@ export default function StudentTestSession() {
                   className="size-4 shrink-0 cursor-pointer accent-primary"
                 />
                 <span className="font-bold text-muted-foreground text-[13px]">{option.id}.</span>
-                <div className={cn("flex-1 text-[13px] break-words min-w-0", (isSelected && !isSubmitted) ? "font-medium text-foreground" : "text-muted-foreground", isSubmitted && "text-foreground")}>
+                <div className={cn("flex-1 text-[13px] break-words min-w-0", (isSelected && (!isSubmitted || !showCorrectness)) ? "font-medium text-foreground" : "text-muted-foreground", isSubmitted && showCorrectness && "text-foreground")}>
                   {option.text}
                 </div>
               </div>
@@ -805,7 +816,7 @@ export default function StudentTestSession() {
                   const isExpected = isMulti ? (correctAns[r.id] || []).includes(c.id) : correctAns[r.id] === c.id;
                   let bgClass = "";
                   
-                  if (isSubmitted) {
+                  if (isSubmitted && showCorrectness) {
                     if (isSelected && isExpected) bgClass = "bg-success/20 ring-2 ring-inset ring-success";
                     else if (isSelected && !isExpected) bgClass = "bg-destructive/20 ring-2 ring-inset ring-destructive";
                     else if (!isSelected && isExpected) bgClass = "bg-warning/20 ring-2 ring-inset ring-warning";
@@ -894,14 +905,20 @@ export default function StudentTestSession() {
                         <td className="p-4 font-bold text-slate-800 align-top">{row.label}</td>
                         <td className="p-4 leading-relaxed align-top">
                           {row.sentences?.map((s: any, i: number) => {
+                            if (s.isClickable === false) {
+                              return <span key={s.id}>{s.text} </span>;
+                            }
+                            
                             const isSelected = selected.includes(s.id);
                             const isExpected = config.correctHighlights?.includes(s.id);
                             let highlightClass = "bg-transparent hover:bg-yellow-100 dark:hover:bg-yellow-900/50 cursor-pointer transition-colors";
-                            if (isSubmitted) {
+                            if (isSubmitted && showCorrectness) {
                               if (isSelected && isExpected) highlightClass = "bg-success/30 border-b-2 border-success font-semibold";
                               else if (isSelected && !isExpected) highlightClass = "bg-destructive/30 border-b-2 border-destructive line-through";
                               else if (!isSelected && isExpected) highlightClass = "bg-warning/30 border-b-2 border-warning border-dashed";
                               else highlightClass = "opacity-50 cursor-default";
+                            } else if (isSubmitted) {
+                              highlightClass = isSelected ? "bg-yellow-300 text-slate-900 dark:bg-yellow-500 dark:text-slate-900 opacity-80 cursor-default" : "opacity-80 cursor-default";
                             } else if (isSelected) {
                               highlightClass = "bg-yellow-300 text-slate-900 dark:bg-yellow-500 dark:text-slate-900";
                             }
@@ -937,11 +954,13 @@ export default function StudentTestSession() {
               const isExpected = config.correctHighlights?.includes(s.id);
               
               let highlightClass = "bg-transparent hover:bg-yellow-100 dark:hover:bg-yellow-900/50 cursor-pointer transition-colors";
-              if (isSubmitted) {
+              if (isSubmitted && showCorrectness) {
                 if (isSelected && isExpected) highlightClass = "bg-success/30 border-b-2 border-success font-semibold";
                 else if (isSelected && !isExpected) highlightClass = "bg-destructive/30 border-b-2 border-destructive line-through";
                 else if (!isSelected && isExpected) highlightClass = "bg-warning/30 border-b-2 border-warning border-dashed";
                 else highlightClass = "opacity-50 cursor-default";
+              } else if (isSubmitted) {
+                highlightClass = isSelected ? "bg-yellow-300 text-slate-900 dark:bg-yellow-500 dark:text-slate-900 opacity-80 cursor-default" : "opacity-80 cursor-default";
               } else if (isSelected) {
                 highlightClass = "bg-yellow-300 text-slate-900 dark:bg-yellow-500 dark:text-slate-900";
               }
@@ -976,7 +995,7 @@ export default function StudentTestSession() {
       >
         {steps.map((step: any, index: number) => {
           let stateClass = "border-border bg-card";
-          if (isSubmitted) {
+          if (isSubmitted && showCorrectness) {
             const expectedIndex = activeQuestion.correctOrder?.indexOf(step.id);
             if (expectedIndex === index) stateClass = "border-success bg-success/10 ring-1 ring-success/20";
             else stateClass = "border-destructive bg-destructive/10 ring-1 ring-destructive/20";
@@ -996,7 +1015,7 @@ export default function StudentTestSession() {
               </div>
               <div className="font-medium text-foreground">{step.text}</div>
               
-              {isSubmitted && activeQuestion.correctOrder?.indexOf(step.id) !== index && (
+              {isSubmitted && showCorrectness && activeQuestion.correctOrder?.indexOf(step.id) !== index && (
                 <div className="ml-auto text-xs font-semibold text-destructive">
                   Should be #{activeQuestion.correctOrder!.indexOf(step.id) + 1}
                 </div>
@@ -1019,7 +1038,14 @@ export default function StudentTestSession() {
     const actionSlotCount = Math.max(1, correctActions.length);
     const paramSlotCount = Math.max(1, correctParameters.length);
     
+    const handleDragStart = (event: any) => {
+      if (event.active.data.current) {
+        setActiveDragItem(event.active.data.current);
+      }
+    };
+
     const handleDragEnd = (event: any) => {
+      setActiveDragItem(null);
       const { active, over } = event;
       if (!over || isSubmitted) return;
 
@@ -1102,7 +1128,7 @@ export default function StudentTestSession() {
             "relative flex items-stretch rounded-none text-[13px] font-medium shadow-[0_1px_4px_-1px_rgba(0,0,0,0.05)] border touch-none group hover:shadow-sm",
             stateClass,
             !typeId.startsWith("bank-") ? "w-full h-full min-h-[3rem]" : "",
-            isDragging ? "opacity-95 ring-2 ring-blue-400/30 scale-105 shadow-md rotate-1 z-50 transition-none" : "transition-all duration-300 ease-out",
+            isDragging ? "opacity-0" : "transition-all duration-300 ease-out",
             isSubmitted && "opacity-90 cursor-default hover:transform-none hover:shadow-sm"
           )}
         >
@@ -1130,9 +1156,9 @@ export default function StudentTestSession() {
         uiClass = "border-transparent bg-transparent p-0";
       }
 
-      if (isSubmitted && value) {
+      if (isSubmitted && showCorrectness && value) {
         uiClass = "border-transparent bg-transparent p-0";
-      } else if (isSubmitted && !value) {
+      } else if (isSubmitted && showCorrectness && !value) {
         uiClass = "bg-red-50 text-red-500 border-dashed border-red-300";
       }
 
@@ -1143,7 +1169,7 @@ export default function StudentTestSession() {
         >
           {value ? (
             <div className="flex w-full h-full items-center justify-center animate-in zoom-in-95 duration-200">
-               <DraggableWord word={value} typeId={id} state={isSubmitted ? (isExpected(value) ? 'correct' : 'incorrect') : undefined} />
+               <DraggableWord word={value} typeId={id} state={isSubmitted && showCorrectness ? (isExpected(value) ? 'correct' : 'incorrect') : undefined} />
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-2">
@@ -1171,7 +1197,7 @@ export default function StudentTestSession() {
     };
 
     return (
-      <DndContext onDragEnd={handleDragEnd} sensors={sensors} collisionDetection={pointerWithin}>
+      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd} onDragCancel={() => setActiveDragItem(null)} sensors={sensors} collisionDetection={pointerWithin} modifiers={[restrictToWindowEdges]}>
         <div className="w-full max-w-[90rem] mx-auto mt-6 flex flex-col gap-6">
           <div className="w-full rounded-2xl bg-white border border-slate-200 shadow-sm select-none relative z-10">
             <div className="flex flex-col md:flex-row items-stretch justify-center p-6 lg:p-8 gap-4 w-full">
@@ -1261,17 +1287,20 @@ export default function StudentTestSession() {
            </div>
          </div>
            
-         {isSubmitted ? (
-           <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-6 h-fit">
-             <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-slate-900">
-               <BookOpen weight="fill" className="size-5 text-teal-700" />
-               Detailed Explanation
-             </h3>
-             <div 
-               className="text-[13px] leading-relaxed text-slate-600 break-words prose prose-sm prose-slate max-w-none"
-               dangerouslySetInnerHTML={{ __html: activeQuestion.rationale || "No explanation provided for this question." }}
-             />
-           </div>          ) : (
+          {isSubmitted ? (
+            shouldShowExplanation ? (
+              <div className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-6 h-fit">
+                <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-slate-900">
+                  <BookOpen weight="fill" className="size-5 text-teal-700" />
+                  Detailed Explanation
+                </h3>
+                <div 
+                  className="text-[13px] leading-relaxed text-slate-600 break-words prose prose-sm prose-slate max-w-none"
+                  dangerouslySetInnerHTML={{ __html: activeQuestion.rationale || "No explanation provided for this question." }}
+                />
+              </div>
+            ) : null
+          ) : (
             <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-6 rounded-2xl bg-white border border-slate-200 shadow-sm p-6 relative z-20">
                {/* Actions Word Bank */}
                <div className="flex flex-col border border-slate-200 rounded-xl bg-slate-50/50">
@@ -1311,6 +1340,15 @@ export default function StudentTestSession() {
             </div>
           )}
         </div>
+        <DragOverlay dropAnimation={null}>
+          {activeDragItem ? (
+            <div className="bg-white text-slate-700 border-slate-200 opacity-95 ring-2 ring-blue-400/30 scale-105 shadow-md rotate-1 z-[99999] relative flex items-stretch rounded-none text-[13px] font-medium border min-w-[200px] min-h-[3rem]">
+              <div className="px-4 py-2.5 flex-1 flex items-center justify-center text-center">
+                <span className="tracking-tight leading-tight">{activeDragItem.word}</span>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     );
   };
@@ -1454,7 +1492,7 @@ export default function StudentTestSession() {
               Options for some blanks depend on your previous selections.
             </div>
           )}
-          {activeQuestion.is_subquestion && (
+          {activeQuestion.is_subquestion && activeQuestion.type !== 'next-gen-cloze' && (
             <div className="mb-6 flex items-start gap-3">
               <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
               <div 
@@ -1470,7 +1508,7 @@ export default function StudentTestSession() {
       ) : (
         <div className="animate-in fade-in duration-500">
           <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question Review</div>
-          {activeQuestion.is_subquestion && (
+          {activeQuestion.is_subquestion && activeQuestion.type !== 'next-gen-cloze' && (
             <div className="mb-6 flex items-start gap-3">
               <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
               <div 
@@ -1483,7 +1521,7 @@ export default function StudentTestSession() {
             <div className="min-w-0">
               {renderContent()}
             </div>
-            {activeQuestion.type !== "bowtie" && (
+            {activeQuestion.type !== "bowtie" && shouldShowExplanation && (
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:p-6 h-fit mt-6">
                 <h3 className="mb-2 flex items-center gap-2 text-[13px] font-bold text-slate-900">
                   <BookOpen weight="fill" className="size-4 text-teal-700" />
@@ -1508,16 +1546,16 @@ export default function StudentTestSession() {
           activeQuestion.type === 'next-gen-cloze' ? (
             <div className="flex items-center gap-4">
                <span className="text-[12px] font-medium text-slate-600 whitespace-nowrap">
-                 {Object.keys(activeQuestion.options?.blanks || {}).filter(id => {
+                 {Object.keys(activeQuestion.clozeBlanks || activeQuestion.options?.blanks || {}).filter(id => {
                    const val = (answerState || {})[id];
-                   return val && activeQuestion.options?.blanks?.[id]?.options?.includes(val);
-                 }).length} of {Object.keys(activeQuestion.options?.blanks || {}).length} blanks completed
+                   return val && (activeQuestion.clozeBlanks || activeQuestion.options?.blanks)?.[id]?.options?.includes(val);
+                 }).length} of {Object.keys(activeQuestion.clozeBlanks || activeQuestion.options?.blanks || {}).length} blanks completed
                </span>
                <div className="h-1.5 w-24 rounded-full bg-slate-200 overflow-hidden shrink-0">
-                  <div className="h-full bg-slate-400 transition-all" style={{ width: `${(Object.keys(activeQuestion.options?.blanks || {}).filter(id => {
+                  <div className="h-full bg-slate-400 transition-all" style={{ width: `${(Object.keys(activeQuestion.clozeBlanks || activeQuestion.options?.blanks || {}).filter(id => {
                      const val = (answerState || {})[id];
-                     return val && activeQuestion.options?.blanks?.[id]?.options?.includes(val);
-                  }).length / Math.max(1, Object.keys(activeQuestion.options?.blanks || {}).length)) * 100}%` }}></div>
+                     return val && (activeQuestion.clozeBlanks || activeQuestion.options?.blanks)?.[id]?.options?.includes(val);
+                  }).length / Math.max(1, Object.keys(activeQuestion.clozeBlanks || activeQuestion.options?.blanks || {}).length)) * 100}%` }}></div>
                </div>
             </div>
           ) : null
@@ -1604,14 +1642,14 @@ export default function StudentTestSession() {
           <>
             <div className="flex-1 flex flex-col h-full overflow-hidden min-h-0 bg-white border-b lg:border-b-0 lg:border-r border-slate-200">
               <div className="flex flex-col h-full overflow-hidden min-h-0">
-                <div className="p-6 md:p-8 lg:p-10 flex-1 min-h-0 overflow-y-auto">
+                <div className="p-6 md:p-8 lg:p-10 flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
                   {renderHeader()}
                   {renderScenario()}
                 </div>
               </div>
             </div>
             <div className="flex-1 flex flex-col h-full bg-white overflow-hidden min-h-0">
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8 lg:p-10">
+              <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-6 md:p-8 lg:p-10">
                 {renderInteractive()}
               </div>
               {renderFooter()}
@@ -1619,13 +1657,15 @@ export default function StudentTestSession() {
           </>
         ) : (
           <div className="flex-1 flex flex-col h-full bg-white overflow-hidden min-h-0">
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 md:p-8 lg:p-12 w-full mx-auto max-w-4xl space-y-8">
-              <div>
-                {renderHeader()}
-                {renderScenario()}
-              </div>
-              <div>
-                {renderInteractive()}
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full">
+              <div className="p-6 md:p-8 lg:p-12 w-full mx-auto max-w-4xl space-y-8">
+                <div>
+                  {renderHeader()}
+                  {renderScenario()}
+                </div>
+                <div>
+                  {renderInteractive()}
+                </div>
               </div>
             </div>
             {renderFooter()}
@@ -1675,7 +1715,7 @@ export default function StudentTestSession() {
             </div>
             
             <button 
-              onClick={() => config.mode === 'review' ? navigate('/student/test-history') : handleEndSession()}
+              onClick={() => config.mode === 'review' ? navigate('/student/test-history') : setShowEndScreen(true)}
               className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors"
             >
               {config.mode === 'review' ? "Exit Review" : "End Session"}
@@ -1703,6 +1743,24 @@ export default function StudentTestSession() {
                   className="mt-8 rounded-lg bg-teal-700 px-8 py-3.5 text-[15px] font-semibold text-white shadow-sm transition hover:bg-teal-800"
                 >
                   End Session & View Results
+                </motion.button>
+              </div>
+            ) : showEndScreen ? (
+              <div className="flex flex-col items-center justify-center space-y-6 rounded-2xl border border-teal-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
+                <div className="grid size-20 place-items-center rounded-full bg-teal-50 text-teal-600">
+                  <CheckCircle2 className="size-10" weight="fill" />
+                </div>
+                <div className="space-y-2">
+                  <h2 className="text-3xl font-bold tracking-tight text-slate-900">Test Complete!</h2>
+                  <p className="text-lg text-slate-500">You have reached the end of this test session.</p>
+                  <p className="text-sm text-slate-400 mt-2">All your submitted answers have been saved.</p>
+                </div>
+                <motion.button
+                  whileTap={{ scale: 0.95 }}
+                  onClick={handleEndSession}
+                  className="mt-8 rounded-lg bg-teal-700 px-8 py-3.5 text-[15px] font-semibold text-white shadow-sm transition hover:bg-teal-800"
+                >
+                  Submit Test & View Results
                 </motion.button>
               </div>
             ) : renderLayout()}
