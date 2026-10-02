@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,7 +24,7 @@ export default PreviousQuestions;
 
 const tabs = ["All", "Published", "Drafts"] as const;
 
-const formatQuestionType = (type: string) => {
+export const formatQuestionType = (type: string) => {
   if (!type) return "";
   if (type === 'bowtie') return 'Next-Gen / Bow-Tie';
   if (type === 'next-gen-cloze') return 'Next-Gen / Fill in the Blank';
@@ -37,7 +38,7 @@ const formatQuestionType = (type: string) => {
   return type;
 };
 
-const renderOptionsPreview = (q: any) => {
+export const renderOptionsPreview = (q: any) => {
   const getOpts = (type: string) => {
     if (type === "bowtie") return q.bowtieConfig || q.options;
     if (type === "next-gen-cloze") return q.clozeBlanks ? { blanks: q.clozeBlanks } : q.options;
@@ -219,7 +220,7 @@ const renderOptionsPreview = (q: any) => {
   return null;
 };
 
-function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
+export function QuestionPreviewContent({ previewQuestion }: { previewQuestion: any }) {
   const [activeTab, setActiveTab] = useState(0);
   const scenarioTabs = previewQuestion.options?.scenario_tabs || previewQuestion.scenario_tabs;
 
@@ -450,20 +451,20 @@ function PreviousQuestions() {
             <PopoverContent align="end" className="w-64 p-4 space-y-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground uppercase">Type</label>
-                <select 
-                  value={filterType} 
-                  onChange={e => setFilterType(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-                >
-                  {types.map(t => <option key={t as string} value={t as string}>{t === "All" ? "All Types" : formatQuestionType(t as string)}</option>)}
-                </select>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {types.map(t => <SelectItem key={t as string} value={t as string}>{t === "All" ? "All Types" : formatQuestionType(t as string)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground uppercase">Category</label>
-                <select 
+                <Select 
                   value={filterCategory} 
-                  onChange={e => {
-                    const val = e.target.value;
+                  onValueChange={val => {
                     setFilterCategory(val);
                     setFilterSubcategory("All");
                     setSearchParams(prev => {
@@ -473,29 +474,37 @@ function PreviousQuestions() {
                       return prev;
                     });
                   }}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
                 >
-                  {categories.map(c => <option key={c as string} value={c as string}>{c === "All" ? "All Categories" : c}</option>)}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map(c => <SelectItem key={c as string} value={c as string}>{c === "All" ? "All Categories" : c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-semibold text-muted-foreground uppercase">Subcategory</label>
-                <select 
+                <Select 
                   value={filterSubcategory} 
                   disabled={filterCategory === "All"}
-                  onChange={e => {
-                    setFilterSubcategory(e.target.value);
+                  onValueChange={val => {
+                    setFilterSubcategory(val);
                     setSearchParams(prev => {
-                      if (e.target.value === "All") prev.delete("subcategory");
-                      else prev.set("subcategory", e.target.value);
+                      if (val === "All") prev.delete("subcategory");
+                      else prev.set("subcategory", val);
                       return prev;
                     });
                   }}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <option value="All">{filterCategory === "All" ? "Select a category first" : "All Subcategories"}</option>
-                  {filterCategory !== "All" && Array.from(new Set(questions.filter(q => q.category === filterCategory).map(q => q.subcategory).filter(Boolean))).map(s => <option key={s as string} value={s as string}>{s}</option>)}
-                </select>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select subcategory" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="All">{filterCategory === "All" ? "Select a category first" : "All Subcategories"}</SelectItem>
+                    {filterCategory !== "All" && Array.from(new Set(questions.filter(q => q.category === filterCategory).map(q => q.subcategory).filter(Boolean))).map(s => <SelectItem key={s as string} value={s as string}>{s}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               {(filterType !== "All" || filterCategory !== "All" || filterSubcategory !== "All") && (
                 <button 
@@ -685,7 +694,7 @@ function PreviousQuestions() {
       </div>
 
       <Dialog open={!!previewQuestion} onOpenChange={(open) => !open && setPreviewQuestion(null)}>
-        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-7xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Question Preview</DialogTitle>
             <DialogDescription>

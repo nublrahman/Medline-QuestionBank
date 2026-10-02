@@ -170,9 +170,7 @@ function CreateQuestion() {
     correctAnswers: {},
     multiSelect: false
   });
-  const [clozeBlanks, setClozeBlanks] = useState<Record<string, { options: string[], correct: string }>>({
-    "1": { options: ["", "", ""], correct: "" }
-  });
+  const [clozeBlanks, setClozeBlanks] = useState<Record<string, { options: string[], correct: string }>>({});
   const [clozeDependencies, setClozeDependencies] = useState<Array<{ sourceBlankId: string, targetBlankId: string, mapping: Record<string, string[]> }>>([]);
   const [highlightConfig, setHighlightConfig] = useState<{
     layout?: "paragraph" | "table";
@@ -381,7 +379,7 @@ function CreateQuestion() {
           parameters: [{ text: "", isCorrect: false }, { text: "", isCorrect: false }, { text: "", isCorrect: false }]
         });
         setTableConfig({ columns: [{ id: "col-1", label: "Improved" }, { id: "col-2", label: "Declined" }], rows: [{ id: "row-1", text: "" }, { id: "row-2", text: "" }], correctAnswers: {}, multiSelect: false });
-        setClozeBlanks({ "1": { options: ["", "", ""], correct: "" } });
+        setClozeBlanks({});
         setClozeDependencies([]);
         setRationale("");
         setGroup("ungrouped");
@@ -580,8 +578,8 @@ function CreateQuestion() {
         };
       }
       itemsToValidate = currentSubs;
-      if (itemsToValidate.length === 0) {
-         toast.error("Grouped questions must have at least one item.");
+      if (itemsToValidate.length < 2) {
+         toast.error("Grouped questions must have at least two items.");
          return;
       }
       const stripHtml = (html: string) => { const tmp = document.createElement("DIV"); tmp.innerHTML = html; return tmp.textContent || tmp.innerText || ""; };
@@ -873,6 +871,10 @@ function CreateQuestion() {
                       Item {idx + 1}
                       <X className="size-3 hover:text-destructive transition-colors" onClick={(e) => { 
                         e.stopPropagation(); 
+                        if (subQuestions.length <= 2) {
+                          toast.error("Grouped questions must have at least two items.");
+                          return;
+                        }
                         const newSubs = subQuestions.filter((_, i) => i !== idx);
                         if (activeSubIndex === idx) {
                           setStem(parentStem);
@@ -1108,6 +1110,10 @@ function CreateQuestion() {
                               const newBlanks = { ...clozeBlanks };
                               delete newBlanks[id];
                               setClozeBlanks(newBlanks);
+                              
+                              // Also remove from stem
+                              const regex = new RegExp(`{\\s*(?:dropdown\\s+)?${id}\\s*}`, 'gi');
+                              setStem(prev => prev.replace(regex, ''));
                             }}
                             className="text-muted-foreground hover:text-destructive"
                           >
@@ -1124,7 +1130,8 @@ function CreateQuestion() {
                                   newOptions[i] = e.target.value;
                                   setClozeBlanks({ ...clozeBlanks, [id]: { ...blank, options: newOptions, correct: (blank.correct === opt && opt !== "") ? e.target.value : blank.correct } });
                                 }}
-                                className="flex-1 bg-transparent text-sm outline-none px-2"
+                                placeholder="Enter option..."
+                                className="flex-1 bg-transparent text-sm outline-none px-2 placeholder:text-muted-foreground/60"
                               />
                               <label className="flex items-center gap-2 text-xs font-semibold">
                                 <input
@@ -1283,6 +1290,10 @@ function CreateQuestion() {
                             />
                             <button
                               onClick={() => {
+                                if (tableConfig.columns.length <= 2) {
+                                  toast.error("At least 2 columns are required.");
+                                  return;
+                                }
                                 const newCols = tableConfig.columns.filter((_: any, idx: number) => idx !== i);
                                 // Clean up correct answers that used this column
                                 const newAnswers = { ...tableConfig.correctAnswers };
@@ -1298,7 +1309,13 @@ function CreateQuestion() {
                           </div>
                         ))}
                         <button
-                          onClick={() => setTableConfig({ ...tableConfig, columns: [...tableConfig.columns, { id: `col-${Math.random().toString(36).substring(7)}`, label: "" }] })}
+                          onClick={() => {
+                            if (tableConfig.columns.length >= 5) {
+                              toast.error("You cannot add more than 5 columns.");
+                              return;
+                            }
+                            setTableConfig({ ...tableConfig, columns: [...tableConfig.columns, { id: `col-${Math.random().toString(36).substring(7)}`, label: "" }] });
+                          }}
                           className="flex items-center gap-1 rounded-lg border border-dashed border-primary bg-primary/5 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
                         >
                           <Plus className="size-3" /> Add Column
@@ -1337,15 +1354,24 @@ function CreateQuestion() {
                                   </button>
                                 </td>
                                 <td className="p-2 border-b border-border">
-                                  <input
+                                  <textarea
                                     value={row.text}
                                     onChange={(e) => {
+                                      e.target.style.height = "auto";
+                                      e.target.style.height = `${e.target.scrollHeight}px`;
                                       const newRows = [...tableConfig.rows];
                                       newRows[i] = { ...newRows[i], text: e.target.value };
                                       setTableConfig({ ...tableConfig, rows: newRows });
                                     }}
                                     placeholder="e.g. Assessment Finding"
-                                    className="w-full bg-transparent text-sm outline-none px-2 py-1 border rounded border-transparent focus:border-border"
+                                    rows={1}
+                                    className="w-full bg-transparent text-sm outline-none px-2 py-1.5 border rounded border-transparent focus:border-border resize-none overflow-hidden min-h-[34px]"
+                                    ref={(el) => {
+                                      if (el) {
+                                        el.style.height = "auto";
+                                        el.style.height = `${el.scrollHeight}px`;
+                                      }
+                                    }}
                                   />
                                 </td>
                                 {tableConfig.columns.map((col: any) => (
@@ -2091,14 +2117,14 @@ function CreateQuestion() {
                 )}
                 
                 <Dialog open={previewModalOpen} onOpenChange={setPreviewModalOpen}>
-                  <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+                  <DialogContent className="max-w-7xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                       <DialogTitle className="text-xl">Question Preview</DialogTitle>
                       <DialogDescription>
                         {category} • {subcategory} ({group === "grouped" ? "Grouped Question" : type})
                       </DialogDescription>
                     </DialogHeader>
-                    <div className={cn("mt-4 rounded-3xl border border-border bg-card/50 p-6 flex flex-col gap-8 shadow-sm", (((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) || (group === "grouped" && !isEmpty(parentStem))) && "md:flex-row")}>
+                    <div className={cn("mt-4 flex flex-col gap-8", (((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) || (group === "grouped" && !isEmpty(parentStem))) && "md:flex-row")}>
                   
                   {(((group === "grouped" ? parentIncludeTabs : includeTabs) && (group === "grouped" ? parentTabs : tabs).filter((t: any) => t.title?.trim() !== "" || (t.type === "table" ? t.tableRows?.length > 0 : !isEmpty(t.content))).length > 0) || (group === "grouped" && !isEmpty(parentStem))) && (
                     <div className="w-full md:w-1/2 flex flex-col gap-5">
@@ -2159,7 +2185,7 @@ function CreateQuestion() {
                     {(group === "grouped" ? (subQuestions.length > 0 ? [subQuestions[previewSubIndex]] : []) : [{ type, stem, options, bowtieConfig, tableConfig, clozeBlanks, highlightConfig, rationale, category, subcategory }]).map((q: any, _mappedIdx: number, arr: any[]) => {
                       const idx = group === "grouped" ? previewSubIndex : 0;
                       return (
-                      <div key={idx} className="w-full bg-background/80 backdrop-blur-md rounded-2xl border border-border p-6 shadow-sm hover:shadow-md transition-all duration-300">
+                      <div key={idx} className="w-full">
                         <div className="mb-5 flex flex-wrap items-center gap-3">
                           <span className="whitespace-nowrap rounded-full bg-secondary/80 px-3 py-1.5 text-xs font-bold text-secondary-foreground shadow-sm">{group === "grouped" ? `Item ${idx + 1}` : "Ungrouped"}</span>
                           <span className="whitespace-nowrap rounded-full bg-primary/10 px-3 py-1.5 text-xs font-bold text-primary shadow-sm ring-1 ring-primary/20">{q?.type === "bowtie" ? "BOW-TIE" : (q?.type||"").replace(/-/g, " ").toUpperCase()}</span>
@@ -2257,7 +2283,7 @@ function CreateQuestion() {
                             </div>
                           ) : q?.type === "next-gen-highlight" && (
                             <div className="space-y-6">
-                              {(() => {
+                              {q?.highlightConfig?.layout === "table" && (() => {
                                 let tables = q?.highlightConfig?.tables;
                                 if (!tables && q?.highlightConfig?.tableRows) {
                                   tables = [{
@@ -2411,8 +2437,8 @@ function CreateQuestion() {
                       }
                       setSubQuestions(currentSubs);
                       itemsToValidate = currentSubs;
-                      if (itemsToValidate.length === 0) {
-                         toast.error("Grouped questions must have at least one item.");
+                      if (itemsToValidate.length < 2) {
+                         toast.error("Grouped questions must have at least two items.");
                          return;
                       }
                       

@@ -279,7 +279,7 @@ export default function StudentTestSession() {
   }, [activePool, timeRemaining, config.mode]);
 
   useEffect(() => {
-    if (timeRemaining === null || timeRemaining <= 0 || config.mode === 'review') return;
+    if (timeRemaining === null || timeRemaining <= 0 || config.mode === 'review' || showEndScreen) return;
 
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
@@ -292,7 +292,7 @@ export default function StudentTestSession() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeRemaining, config.mode]);
+  }, [timeRemaining, config.mode, showEndScreen]);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -676,27 +676,33 @@ export default function StudentTestSession() {
                   return (
                     <span key={i} className="inline-flex relative mx-1 my-0.5 align-middle">
                       {isSubmitted ? (
-                        <span className={cn(
-                          "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold text-[15px] border shadow-sm",
-                          isAnsweredCorrectly 
-                            ? "bg-green-50 text-green-700 border-green-200" 
-                            : "bg-red-50 text-red-700 border-red-200"
-                        )}>
-                          <span className={cn(!isAnsweredCorrectly && "line-through opacity-70")}>
-                            {answers[blankId] || "No answer"}
+                        showCorrectness ? (
+                          <span className={cn(
+                            "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold text-[15px] border shadow-sm",
+                            isAnsweredCorrectly 
+                              ? "bg-green-50 text-green-700 border-green-200" 
+                              : "bg-red-50 text-red-700 border-red-200"
+                          )}>
+                            <span className={cn(!isAnsweredCorrectly && "line-through opacity-70")}>
+                              {answers[blankId] || "No answer"}
+                            </span>
+                            {!isAnsweredCorrectly && (
+                              <>
+                                <span className="text-slate-300">→</span>
+                                <span className="text-green-700">{blank.correct}</span>
+                              </>
+                            )}
+                            {isAnsweredCorrectly ? (
+                              <CheckCircle2 className="size-4" weight="bold" />
+                            ) : (
+                              <XCircle className="size-4 text-red-500" weight="bold" />
+                            )}
                           </span>
-                          {!isAnsweredCorrectly && (
-                            <>
-                              <span className="text-slate-300">→</span>
-                              <span className="text-green-700">{blank.correct}</span>
-                            </>
-                          )}
-                          {isAnsweredCorrectly ? (
-                            <CheckCircle2 className="size-4" weight="bold" />
-                          ) : (
-                            <XCircle className="size-4 text-red-500" weight="bold" />
-                          )}
-                        </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 font-bold text-[15px] border shadow-sm bg-slate-50 text-slate-700 border-slate-200">
+                            <span>{answers[blankId] || "No answer"}</span>
+                          </span>
+                        )
                       ) : (
                         <div className="relative">
                           <Select
@@ -809,7 +815,7 @@ export default function StudentTestSession() {
           <tbody className="divide-y divide-border">
             {config.rows?.map((r: any) => (
               <tr key={r.id}>
-                <td className="p-4 font-medium text-foreground">{r.text}</td>
+                <td className="p-4 font-medium text-foreground break-words whitespace-pre-wrap max-w-[250px]">{r.text}</td>
                 {config.columns?.map((c: any) => {
                   const isMulti = config.multiSelect;
                   const isSelected = isMulti ? (answers[r.id] || []).includes(c.id) : answers[r.id] === c.id;
@@ -873,7 +879,7 @@ export default function StudentTestSession() {
       <div className="space-y-4">
         {config.layout === "table" ? (
           <div className="flex flex-col mt-4">
-            <div className="flex border-b border-slate-300 gap-1 overflow-x-auto">
+            <div className="flex border-b border-slate-300 gap-1 overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden">
               {(tables || []).map((t: any, idx: number) => (
                 <button
                   key={t.id}
@@ -1420,7 +1426,7 @@ export default function StudentTestSession() {
     if (!activeQuestion.scenario_tabs || activeQuestion.scenario_tabs.length === 0) return null;
     return (
       <div className={cn("mt-6", !activeQuestion.is_subquestion && "mb-8")}>
-        <div className="flex overflow-x-auto gap-2 z-10 relative px-0 -mb-[1px]">
+        <div className="flex overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden gap-2 z-10 relative px-0 -mb-[1px]">
           {activeQuestion.scenario_tabs.map((tab: any, i: number) => {
             const isActive = activeTab === i;
             return (
@@ -1507,7 +1513,9 @@ export default function StudentTestSession() {
         </div>
       ) : (
         <div className="animate-in fade-in duration-500">
-          <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">Question Review</div>
+          <div className="mb-3 text-[11px] font-bold uppercase tracking-[0.2em] text-teal-700">
+            {showCorrectness ? "Question Review" : "Response Recorded"}
+          </div>
           {activeQuestion.is_subquestion && activeQuestion.type !== 'next-gen-cloze' && (
             <div className="mb-6 flex items-start gap-3">
               <div className="mt-1 font-bold text-teal-700 text-[15px] shrink-0">Q:</div>
@@ -1728,7 +1736,7 @@ export default function StudentTestSession() {
           <div className="w-full h-full flex flex-col relative z-10">
             
             {timeRemaining === 0 ? (
-              <div className="flex flex-col items-center justify-center space-y-6 rounded-2xl border border-red-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
+              <div className="flex flex-col flex-1 items-center justify-center space-y-6 rounded-2xl border border-red-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
                 <div className="grid size-20 place-items-center rounded-full bg-red-50 text-red-500">
                   <Clock className="size-10" weight="fill" />
                 </div>
@@ -1746,7 +1754,7 @@ export default function StudentTestSession() {
                 </motion.button>
               </div>
             ) : showEndScreen ? (
-              <div className="flex flex-col items-center justify-center space-y-6 rounded-2xl border border-teal-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
+              <div className="flex flex-col flex-1 items-center justify-center space-y-6 rounded-2xl border border-teal-200 bg-white p-12 text-center shadow-sm animate-in fade-in zoom-in duration-500">
                 <div className="grid size-20 place-items-center rounded-full bg-teal-50 text-teal-600">
                   <CheckCircle2 className="size-10" weight="fill" />
                 </div>
