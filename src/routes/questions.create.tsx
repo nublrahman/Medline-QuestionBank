@@ -1641,7 +1641,7 @@ function CreateQuestion() {
                                           const otherRowsC = currentC.filter((id: string) => !id.includes(`-${row.id}-`));
                                           const finalCorrect = [...otherRowsC, ...parsedCorrect];
                                           
-                                          setHighlightConfig({...highlightConfig, tables: newTables, correctHighlights: parsedCorrect.length > 0 ? finalCorrect : currentC});
+                                          setHighlightConfig({...highlightConfig, tables: newTables, correctHighlights: finalCorrect});
                                         }}
                                         
                                         className="w-full min-h-[80px] rounded-lg border border-border p-3 text-sm bg-background resize-y outline-none focus:border-primary shadow-sm"
